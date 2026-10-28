@@ -1,0 +1,13 @@
+plans
+.git
+.env
+.env.*
+!.env.example
+runtime
+node_modules
+.venv
+__pycache__
+.pytest_cache
+test-results
+playwright-report
+dist

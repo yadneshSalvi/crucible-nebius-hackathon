@@ -2,3 +2,16 @@
 .env.*
 !.env.example
 .DS_Store
+/plans/
+node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+runtime/
+dist/
+web/dist/
+test-results/
+playwright-report/
+*.sqlite*
+coverage/
