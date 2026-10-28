@@ -139,7 +139,11 @@ export default function App() {
     return () => window.removeEventListener("popstate", back);
   }, []);
   const openHistory = () => {
-    window.history.pushState({}, "", `${window.location.pathname}?view=history`);
+    window.history.pushState(
+      {},
+      "",
+      `${window.location.pathname}?view=history`,
+    );
     setHistory(true);
     window.scrollTo({ top: 0, behavior: "instant" });
   };

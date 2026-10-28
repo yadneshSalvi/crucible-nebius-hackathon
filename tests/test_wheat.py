@@ -213,7 +213,26 @@ class TestWheatIntegrity(unittest.TestCase):
             self.assertFalse((new_root / "preparation-identity.json").exists())
             error(self, "INSUFFICIENT_STORAGE", wheat.train, {"root": str(self.root), "contract": self.contract})
 
+    def test_source_codec_comes_from_bytes_not_archive_filename(self):
+        photograph = self.base / "train.png"
+        Image.new("RGB", (1024, 1024), (10, 20, 30)).save(photograph, format="JPEG")
+        source = read_json(self.source)
+        source["records"][0]["sha256"] = file_hash(photograph)
+        self.source.write_bytes(canonical_bytes(source))
+        target = self.base / "codec-case"
+        wheat.prepare({"root": str(target), "source_manifest": str(self.source)})
+        row = read_json(target / "split-manifest.json")["splits"]["train"][0]
+        self.assertEqual(row["encoded_format"], "JPEG")
+        self.assertEqual(row["image"]["media_type"], "image/jpeg")
+        self.assertEqual((target / row["image"]["path"]).read_bytes(), photograph.read_bytes())
+        source["records"][0]["encoded_format"] = "PNG"
+        error(self, "SOURCE_HASH_MISMATCH", wheat._normalize_records, source, self.base)
+
     def test_dependency_lock_is_frozen_hashed_and_tamper_checked(self):
+        cuda = self.prepared["dependencies"]["files"]["requirements-wheat-linux-cuda.lock"]
+        cuda_path = self.root / cuda["path"]
+        self.assertEqual(cuda_path.read_bytes(), (Path(wheat.__file__).parent.parent / "requirements-wheat-linux-cuda.lock").read_bytes())
+        self.assertEqual(cuda["sha256"], file_hash(cuda_path))
         record = self.prepared["dependencies"]["files"]["requirements-wheat.lock"]
         path = self.root / record["path"]
         original = Path(wheat.__file__).parent.parent / "requirements-wheat.lock"

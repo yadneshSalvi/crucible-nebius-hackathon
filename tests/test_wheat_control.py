@@ -65,6 +65,48 @@ def test_missing_images_never_become_prepared_or_run(controller):
     assert caught.value.code == "wheat_action_gated"
 
 
+def test_preparation_preserves_only_same_released_discovery_annotations():
+    from api.wheat import _preserve_released_illustration
+    previous = {"id": "known", "sha256": "a" * 64, "split": "discovery", "ground_truth_released": True,
+                "targets": [{"id": "target-0", "bbox": [1, 2, 3, 4]}], "license": "Original attribution"}
+    prepared = {"id": "known", "sha256": "a" * 64, "split": "discovery", "ground_truth_released": False, "targets": []}
+    preserved = _preserve_released_illustration(previous, prepared)
+    assert preserved["ground_truth_released"] and preserved["targets"] == previous["targets"]
+    assert preserved["license"] == previous["license"]
+    preserved["targets"][0]["bbox"][0] = 999
+    assert previous["targets"][0]["bbox"][0] == 1
+    for changed in ({"id": "different"}, {"sha256": "b" * 64}, {"ground_truth_released": False}, {"split": "final"}):
+        assert _preserve_released_illustration({**previous, **changed}, prepared) == prepared
+    final = {**prepared, "split": "final"}
+    assert _preserve_released_illustration(previous, final) == final
+
+
+@pytest.mark.parametrize("mask", ["3", "GPU-assigned-fixture", ""])
+def test_both_worker_hops_preserve_gpu_assignment_without_credentials(controller, monkeypatch, mask):
+    from science.wheat import _minimal_environment
+    runner, _ = controller
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", mask)
+    monkeypatch.setenv("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
+    monkeypatch.setenv("NEBIUS_API_KEY", "fixture-secret-never-forward")
+    captured = {}
+
+    class CapturedEnvironment(Exception):
+        pass
+
+    async def intercept(*args, **kwargs):
+        captured.update(kwargs["env"])
+        raise CapturedEnvironment()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", intercept)
+    runner.python = __import__("pathlib").Path(__import__("sys").executable)
+    with pytest.raises(CapturedEnvironment):
+        asyncio.run(runner._science({"id": "gpu-assignment-fixture", "input": {}}, "train"))
+    for environment in (captured, _minimal_environment()):
+        assert environment["CUDA_VISIBLE_DEVICES"] == mask
+        assert environment["CUDA_DEVICE_ORDER"] == "PCI_BUS_ID"
+        assert "NEBIUS_API_KEY" not in environment
+
+
 def test_final_family_binds_pixels_across_changed_manifests(controller):
     runner, store = controller
     save(store, completed_discovery())

@@ -11,6 +11,7 @@ import collections
 import csv
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import math
 import os
@@ -34,7 +35,7 @@ SOURCE_PROVENANCE = {
     ],
     "annotation_source": {"member": "gwhd_2021/competition_train.csv", "sha256": TRAIN_CSV_SHA256},
     "metadata_source": {"member": "gwhd_2021/metadata_dataset.csv", "sha256": METADATA_SHA256},
-    "modifications": "Authored session/site partitions; conflicting source IDs quarantined; metadata correction recorded; source xyxy annotations normalized to xywh; original PNG bytes retained",
+    "modifications": "Authored session/site partitions; conflicting source IDs quarantined; metadata correction recorded; source xyxy annotations normalized to xywh; original source-image bytes and filenames retained without conversion; JPEG/PNG encoding detected from bytes",
 }
 
 
@@ -93,6 +94,26 @@ def parse_boxes(value):
     return boxes
 
 
+def inspect_source_image(path):
+    """Bind raw bytes and their decoded identity without trusting the suffix."""
+    from PIL import Image
+    data = path.read_bytes()
+    with Image.open(io.BytesIO(data)) as image:
+        if image.size != (1024, 1024) or image.mode != "RGB":
+            raise ValueError("Unexpected primary image dimensions or color mode")
+        if image.format not in {"JPEG", "PNG"}:
+            raise ValueError("Unexpected primary image encoding; only audited JPEG/PNG sources are accepted")
+        return {"sha256": sha(data), "pixel_sha256": sha(image.tobytes()),
+                "dimensions_verified": True, "encoded_format": image.format,
+                "media_type": Image.MIME[image.format]}
+
+
+def manifest_filename(value):
+    if Path(value).name != value or not (value == "manifest.json" or (value.startswith("manifest-") and value.endswith(".json"))):
+        raise argparse.ArgumentTypeError("Use manifest.json or a manifest-*.json basename inside the assets directory")
+    return value
+
+
 def select_illustration(root, rows):
     candidates = sorted(row["image_name"] for row in rows if row["domain"] == "Rres_1")
     if not candidates or candidates[0] != ILLUSTRATION + ".png":
@@ -114,6 +135,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--assets-root", type=Path, default=Path("runtime/wheat-assets"))
     parser.add_argument("--finalize", action="store_true")
+    parser.add_argument("--manifest-name", type=manifest_filename, default="manifest.json",
+                        help="Alternate immutable manifest name for an explicit audited metadata revision; never overwrites a manifest")
     args = parser.parse_args()
     root = args.assets_root.resolve()
     primary = root / "primary/gwhd_2021"
@@ -162,16 +185,9 @@ def main():
         ann_bytes = encoded(annotation)
         immutable(ann_path, ann_bytes)
         path = primary / "images" / row["image_name"]
-        image = {**role_row, "path": str(path), "annotation_path": str(ann_path), "annotation_sha256": sha(ann_bytes), "bbox_format": "xywh", "width": 1024, "height": 1024, "dimensions_verified": False, "sha256": None, "pixel_sha256": None}
+        image = {**role_row, "path": str(path), "annotation_path": str(ann_path), "annotation_sha256": sha(ann_bytes), "bbox_format": "xywh", "width": 1024, "height": 1024, "dimensions_verified": False, "sha256": None, "pixel_sha256": None, "encoded_format": None, "media_type": None}
         if path.exists():
-            from PIL import Image
-            data = path.read_bytes()
-            with Image.open(path) as im:
-                if im.size != (1024, 1024) or im.mode != "RGB":
-                    raise ValueError("Unexpected primary image dimensions or color mode")
-                # Match the trusted detector/oracle identity: raw decoded RGB
-                # bytes; mode and fixed dimensions are validated immediately above.
-                image.update(sha256=sha(data), pixel_sha256=sha(im.tobytes()), dimensions_verified=True)
+            image.update(inspect_source_image(path))
         else:
             missing.append(image_id)
         catalog.append(image)
@@ -183,6 +199,7 @@ def main():
     excluded_ids = {i["image_id"] for g in quarantined for i in g}
     output = {"format": "crucible.wheat-asset-catalog/v1", "prepared": not missing, "role_plan_sha256": sha(encoded(plan)), "images": catalog, "missing_images": missing, "quarantined_cross_role_duplicate_groups": [[i["image_id"] for i in g] for g in quarantined], "illustration_image_id": ILLUSTRATION, "limits": plan["limits"]}
     output["source_provenance"] = SOURCE_PROVENANCE
+    output["encoded_format_counts"] = dict(collections.Counter(image["encoded_format"] for image in catalog if image["encoded_format"] is not None))
     output["source_selection_audit"] = {key: plan[key] for key in (
         "selection", "source_rows", "ambiguous_source_id_quarantine", "duplicate_rule", "metadata_corrections")}
     publish_pending(root / "catalog.pending.json", encoded(output))
@@ -194,8 +211,8 @@ def main():
         manifest = {**output, "format": "crucible.wheat-assets/v1", "images": [i for i in catalog if i["image_id"] not in excluded_ids]}
         data = encoded(manifest)
         immutable(root / ("manifest-" + sha(data)[:20] + ".json"), data)
-        immutable(root / "manifest.json", data)
-    print(json.dumps({"planned_records": len(catalog), "planned_roles": dict(collections.Counter(i["role"] for i in catalog)), "available_images": len(catalog) - len(missing), "missing_images": len(missing), "cross_role_duplicate_groups": len(quarantined), "finalized": bool(args.finalize), "catalog": str(root / "catalog.pending.json")}, indent=2))
+        immutable(root / args.manifest_name, data)
+    print(json.dumps({"planned_records": len(catalog), "planned_roles": dict(collections.Counter(i["role"] for i in catalog)), "available_images": len(catalog) - len(missing), "missing_images": len(missing), "encoded_format_counts": output["encoded_format_counts"], "cross_role_duplicate_groups": len(quarantined), "finalized": bool(args.finalize), "manifest_name": args.manifest_name if args.finalize else None, "catalog": str(root / "catalog.pending.json")}, indent=2))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # Local validation — 28 October 2026
 
+This is the historical tabular-adapter validation record. The later wheat corpus, provider qualifications and current execution status are recorded in [wheat workbench validation](wheat-validation.md).
+
 These are measured local engineering checks and authored experiments, not a frozen benchmark, human study or external scientific review. Scientific source is frozen at `13b056a70b69d8331bb4ab7ad05695f1c682a6ab7382ff32bbce4701ed207150`; numerical specification digest is `9f92c8739a62dce21a9e0096283f932c8678de372c59c2d4eac60bca303d7224`.
 
 ## Executed evidence

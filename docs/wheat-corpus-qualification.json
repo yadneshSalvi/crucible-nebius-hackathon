@@ -1,0 +1,247 @@
+{
+  "schema": "crucible.wheat-corpus-qualification/v1",
+  "status": "SOURCE_ACQUISITION_AND_CASE_PREPARATION_QUALIFIED",
+  "recorded_at": "2026-10-28T18:18:02.030128+00:00",
+  "scope": "Source integrity, acquisition engineering and actual case preparation; no detector fitting, scientific predictions or final metric exposure.",
+  "source": {
+    "record_url": "https://zenodo.org/records/5092309",
+    "archive": "gwhd_2021.zip",
+    "archive_bytes": 10215190132,
+    "published_archive_md5": "22b4b542c9ae7e056d7fcdeae9ecaed5",
+    "full_archive_checksum_verified": false,
+    "competition_training_csv_sha256": "1af1d8e386643afe8cd1b41d89ca2634d3212908bdbe58a9d7cd5b32e4048176",
+    "session_metadata_csv_sha256": "1fb0a498a4a2d3fff2424b65ecbc41f0ca10d5fc26137b09ffc42c8f3f92d49a",
+    "role_plan": {
+      "path": "runtime/wheat-assets/role-plan.json",
+      "sha256": "bb64df545f2c51264a512a4c1e4cd275bc7a90d01705ce1a5f54cb6dc6c12e9f",
+      "bytes": 865938
+    }
+  },
+  "manifest_revision": {
+    "superseded": {
+      "path": "runtime/wheat-assets/manifest-6513897f2727b061cc89.json",
+      "sha256": "6513897f2727b061cc89c4b187af2d88b208e65ebba2294241113bb2430e0e0e",
+      "bytes": 3466114
+    },
+    "current": {
+      "path": "runtime/wheat-assets/manifest-b7c7c45c33b7bf058676.json",
+      "sha256": "b7c7c45c33b7bf0586766ca87cd302ae79a69b6736e27a864267cdff626431aa",
+      "bytes": 3642389
+    },
+    "stable_alias": "runtime/wheat-assets/manifest.json",
+    "supersession_receipt": {
+      "path": "runtime/wheat-assets/manifest-supersession-b7c7c45c33b7bf058676.json",
+      "sha256": "6adadbc4e7fd5a30a433e27145316f2815a2738ebd29a9fb689bb3166afb9c40",
+      "bytes": 1029
+    },
+    "changed_fields": [
+      "images[].encoded_format",
+      "images[].media_type",
+      "encoded_format_counts",
+      "source_provenance.modifications"
+    ],
+    "unchanged_complete_source_records": 3653,
+    "supersession_before_case_preparation": {
+      "revision": 19,
+      "prepared": false,
+      "training": "not_started",
+      "cells": {
+        "unrun": 8
+      },
+      "registration": "not_registered",
+      "exposure_records": 0,
+      "receipts": 7
+    },
+    "source_bytes_converted": false
+  },
+  "corpus": {
+    "images": 3653,
+    "source_image_bytes": 6452120850,
+    "roles": {
+      "discovery": 432,
+      "final": 210,
+      "train": 3011
+    },
+    "encoded_formats": {
+      "JPEG": 401,
+      "PNG": 3252
+    },
+    "filename_suffix": ".png",
+    "decoded_mode": "RGB",
+    "dimensions": [
+      1024,
+      1024
+    ],
+    "verified_raw_sha_crc_and_decode_members": 3653,
+    "distinct_image_ids": 3653,
+    "distinct_raw_sha256": 3653,
+    "distinct_decoded_pixel_sha256": 3653,
+    "verified_separate_annotation_hashes": 3653,
+    "exact_duplicate_groups": 0,
+    "cross_role_exact_duplicate_groups": 0,
+    "session_role_overlaps": 0,
+    "group_role_overlaps": 0,
+    "original_quarantined_ids": 2,
+    "original_quarantined_rows": 4,
+    "additional_quarantined_images": 0
+  },
+  "acquisition": {
+    "receipt": {
+      "path": "runtime/wheat-assets/download-progress.json",
+      "sha256": "8123566dc64a9310358d67474a20a7fd9759f1faa229e80ba06f93f21e941045",
+      "bytes": 973345
+    },
+    "transport_source_sha256": "03e276a9264c8e64bde01139b87c893eb974a0df757f34cbbb7bde4c3986b465",
+    "catalog_source_sha256": "930e9866c3d2a99a9be7ad5ebb89cc8205830180bf2e312ca7f31c6e75f6c13e",
+    "attempts": [
+      {
+        "format": "crucible.wheat-download/v1",
+        "role_plan_sha256": "bb64df545f2c51264a512a4c1e4cd275bc7a90d01705ce1a5f54cb6dc6c12e9f",
+        "planned_images": 3653,
+        "missing_images": 3652,
+        "missing_image_bytes": 6450846275,
+        "required_free_bytes": 8598329923,
+        "available_free_bytes": 21420064768,
+        "reserve_bytes": 2147483648,
+        "download_requested": true,
+        "full_archive_checksum_verified": false,
+        "started_at": "2026-10-28T17:31:58.830790+00:00",
+        "status": "INTERRUPTED_OR_FAILED",
+        "completed_images": 174,
+        "network_bytes": 437342012,
+        "error_type": "KeyboardInterrupt",
+        "error": "",
+        "ended_at": "2026-10-28T17:35:54.510016+00:00"
+      },
+      {
+        "format": "crucible.wheat-download/v1",
+        "role_plan_sha256": "bb64df545f2c51264a512a4c1e4cd275bc7a90d01705ce1a5f54cb6dc6c12e9f",
+        "planned_images": 3653,
+        "missing_images": 3479,
+        "missing_image_bytes": 6137896494,
+        "required_free_bytes": 8285380142,
+        "available_free_bytes": 21008781312,
+        "reserve_bytes": 2147483648,
+        "download_requested": true,
+        "full_archive_checksum_verified": false,
+        "started_at": "2026-10-28T17:44:15.246621+00:00",
+        "workers": 4,
+        "range_budget": {
+          "max_bytes": 20430380264,
+          "max_requests": 4096,
+          "requested_bytes": 8997513631,
+          "completed_range_bytes": 8997513631,
+          "requests": 1092,
+          "completed_requests": 1092,
+          "failed_requests": 0,
+          "scope": "All readers in this attempt; requested bytes include failed/in-flight ranges. One metadata API request is separate."
+        },
+        "transport_source_sha256": "03e276a9264c8e64bde01139b87c893eb974a0df757f34cbbb7bde4c3986b465",
+        "status": "COMPLETED",
+        "completed_images": 3653,
+        "network_bytes": 8997513631,
+        "ended_at": "2026-10-28T17:59:23.971277+00:00"
+      }
+    ],
+    "transport_benchmark": {
+      "receipt": {
+        "path": "runtime/wheat-assets/transport-benchmark-9fe4e6937aea4cdab3607147064f5a99.json",
+        "sha256": "ee7268e336aa9b0bec89e1bc7d02d8e4ecaae9ee69a4bcdd96bcc6c6dbdd1531",
+        "bytes": 2156
+      },
+      "scope": "Same 32 source members, sequential trial first, four-reader trial second; a small nonrandomized engineering comparison, not a full-corpus runtime guarantee.",
+      "trials": [
+        {
+          "workers": 1,
+          "verified_members": 32,
+          "source_bytes": 58719237,
+          "elapsed_seconds": 61.98874329100363,
+          "completed_range_bytes": 93409084
+        },
+        {
+          "workers": 4,
+          "verified_members": 32,
+          "source_bytes": 58719237,
+          "elapsed_seconds": 37.937589375069365,
+          "completed_range_bytes": 105200880
+        }
+      ]
+    }
+  },
+  "preserved_assets": {
+    "illustration_selection": {
+      "path": "runtime/wheat-assets/illustration-selection.json",
+      "sha256": "026d9a2ef9c426da46008bba9868c265f19e78d99aab7fb95055127e76323e41",
+      "bytes": 522
+    },
+    "illustration": {
+      "path": "runtime/wheat-assets/primary/gwhd_2021/images/0077c64686e9712d9b8efcd930ce5b0d68c72d8fb50ee99ed01ff2fd73e6d1d2.png",
+      "sha256": "2454d9090c4fafadd7c7d24840eb1d2e049b7c9fc2f7f4fb3fb78a84ad0fa917",
+      "bytes": 1274575
+    },
+    "imagenet_v1_initialization": {
+      "path": "runtime/wheat-assets/resnet50-0676ba61.pth",
+      "sha256": "0676ba61b6795bbe1773cffd859882e5e297624d384b6993f7c9e683e722fb8a",
+      "bytes": 102530333
+    },
+    "source_only_initialization_receipt": {
+      "path": "runtime/wheat-assets/initialization-attempt-a88aba4c39754d0986cb566e1f92cd6e.json",
+      "sha256": "a3309a28e55c7412905ce8469b92c7829c6f363148cca14e17efe6eb5b134c48",
+      "bytes": 698
+    }
+  },
+  "independent_verification": {
+    "orchestrator_proof": {
+      "path": "evidence/orchestrator-corpus-qa.json",
+      "sha256": "f17c569b9c2848277667f05cb00f58ce78639bb2f36974196e753c9cdc56c35e",
+      "bytes": 4083
+    },
+    "corrected_corpus_audit": {
+      "path": "evidence/corpus-qa/full-corpus-independent-audit.json",
+      "sha256": "cb1db294134712a8e7a3a7860f9631ebebd93fa176bd9fbac3f7d727af566796",
+      "bytes": 1365
+    },
+    "corrected_corpus_audit_seconds": 61.905,
+    "preparation_job_id": "44a66b6fb119487482bb07dd7f187b91",
+    "revision": 22,
+    "prepared_json_sha256": "d8a7248526fa07c4b65ea2bd21fa39ddb21bceadfe7815bf337eb9c41a4a8d24",
+    "corpus_sha256": "d0bb7c5818c586d6ac727af5d53db2c4074a9ea2c96ea61771c6e9e202617a30",
+    "trusted_code_sha256": "09046c4744caf4c2345edb48d801db836016ace2c9cc8d91f5ad57458fb38342",
+    "verified_source_hardlinks": 3653,
+    "frozen_dependency_sha256": {
+      "requirements-wheat-linux-cuda.lock": "82a40fd3cdf76a125977ee0a3c0bd101602035413d7d80b766823fa5f68431c5",
+      "requirements-wheat.lock": "d0d47f29f1496d0b45113bfdfaa713bf1a573cbdb58363427f97173499f8ef27",
+      "requirements-wheat.txt": "c6585eaa5f0127f8e4d22548dcd34604c68fa94d2fb32c19caeca3a351ddfaa9"
+    },
+    "released_discovery_boxes": 45,
+    "legacy_folios_unchanged": 6,
+    "existing_receipt_files_preserved": 53,
+    "additional_provider_calls": 0,
+    "automated_tests": {
+      "passed": 152,
+      "subtests": 7,
+      "seconds": 19.41
+    },
+    "typecheck_build_format": "passed"
+  },
+  "remaining_execution_gate": {
+    "training": "not_started",
+    "unrun_cells": 8,
+    "final_exposures": 0,
+    "export_available": false,
+    "admission_status": "INSUFFICIENT_STORAGE",
+    "additional_full_pipeline_bytes": 23520129351,
+    "reserve_bytes": 2147483648,
+    "required_free_bytes_including_reserve": 25667612999,
+    "free_bytes_at_independent_preparation_audit": 14508650496,
+    "approximate_fresh_pre_ingestion_requirement_gib": 31,
+    "scope": "Complete fixed corpus, three seeds, ten epochs, fixed model/full FP32/resolution, and one evidence ZIP; extraction, fresh replay and new dependencies need additional separate capacity."
+  },
+  "limits": [
+    "Actual Linux/CUDA installation and detector execution remain unqualified; CPU-only contracts and small CPU/MPS runtime smoke are engineering checks.",
+    "No human methodological review, practitioner threshold, field adoption or acquisition-unit independence is established.",
+    "Public final labels have trusted local process custody, not historical benchmark decontamination or independent external custody.",
+    "Exact decoded hashes do not establish absence of near duplicates or overlapping plots.",
+    "Runtime source assets, raw manifests and receipt history remain local and must be preserved together; images are not committed."
+  ]
+}

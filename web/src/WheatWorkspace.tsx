@@ -28,10 +28,18 @@ export function WheatWorkspace({ onHistory }: { onHistory: () => void }) {
         if (!alive) return;
         accept(next);
         setError(null);
-        if (next.run && ["queued", "running", "cancel_requested"].includes(next.run.status)) delay = 1500;
+        if (
+          next.run &&
+          ["queued", "running", "cancel_requested"].includes(next.run.status)
+        )
+          delay = 1500;
       } catch (failure) {
         if (!alive) return;
-        setError(failure instanceof Error ? failure.message : "The saved wheat study could not be read.");
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : "The saved wheat study could not be read.",
+        );
         delay = 5000;
       } finally {
         if (alive) {
@@ -41,7 +49,10 @@ export function WheatWorkspace({ onHistory }: { onHistory: () => void }) {
       }
     }
     void poll();
-    return () => { alive = false; if (timer) clearTimeout(timer); };
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
   }, [accept, version]);
 
   async function action(name: string, payload: Record<string, unknown> = {}) {
@@ -51,11 +62,22 @@ export function WheatWorkspace({ onHistory }: { onHistory: () => void }) {
     setError(null);
     try {
       accept(await api.wheatAction(latest.current, name, payload));
-      setVersion(value => value + 1);
+      setVersion((value) => value + 1);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "The action failed. Saved evidence is retained.");
-      if (failure instanceof ApiError && /revision|conflict|stale|session/.test(failure.code)) {
-        try { accept(await api.wheat()); } catch { /* Preserve the last durable state. */ }
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "The action failed. Saved evidence is retained.",
+      );
+      if (
+        failure instanceof ApiError &&
+        /revision|conflict|stale|session/.test(failure.code)
+      ) {
+        try {
+          accept(await api.wheat());
+        } catch {
+          /* Preserve the last durable state. */
+        }
       }
     } finally {
       mutation.current = false;
@@ -63,7 +85,15 @@ export function WheatWorkspace({ onHistory }: { onHistory: () => void }) {
     }
   }
 
-  return <Wheat study={study} loading={loading} error={error} pending={pending}
-    onAction={(name, payload) => void action(name, payload)} onHistory={onHistory}
-    onRefresh={() => setVersion(value => value + 1)} />;
+  return (
+    <Wheat
+      study={study}
+      loading={loading}
+      error={error}
+      pending={pending}
+      onAction={(name, payload) => void action(name, payload)}
+      onHistory={onHistory}
+      onRefresh={() => setVersion((value) => value + 1)}
+    />
+  );
 }

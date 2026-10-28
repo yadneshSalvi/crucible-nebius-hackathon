@@ -1,0 +1,44 @@
+{
+  "schema": "crucible.root-prepared-corpus-qa/v1",
+  "status": "PASSED",
+  "prepared_job_id": "44a66b6fb119487482bb07dd7f187b91",
+  "revision": 22,
+  "source_manifest_sha256": "b7c7c45c33b7bf0586766ca87cd302ae79a69b6736e27a864267cdff626431aa",
+  "prepared_json_sha256": "d8a7248526fa07c4b65ea2bd21fa39ddb21bceadfe7815bf337eb9c41a4a8d24",
+  "corpus_sha256": "d0bb7c5818c586d6ac727af5d53db2c4074a9ea2c96ea61771c6e9e202617a30",
+  "trusted_code_sha256": "09046c4744caf4c2345edb48d801db836016ace2c9cc8d91f5ad57458fb38342",
+  "roles": {
+    "confirmation": 210,
+    "discovery": 432,
+    "train": 3011
+  },
+  "verified_same_filesystem_source_hardlinks": 3653,
+  "encoded_formats": {
+    "JPEG": 401,
+    "PNG": 3252
+  },
+  "frozen_dependency_sha256": {
+    "requirements-wheat-linux-cuda.lock": "82a40fd3cdf76a125977ee0a3c0bd101602035413d7d80b766823fa5f68431c5",
+    "requirements-wheat.lock": "d0d47f29f1496d0b45113bfdfaa713bf1a573cbdb58363427f97173499f8ef27",
+    "requirements-wheat.txt": "c6585eaa5f0127f8e4d22548dcd34604c68fa94d2fb32c19caeca3a351ddfaa9"
+  },
+  "pipeline_admission": {
+    "status": "BLOCKED",
+    "code": "INSUFFICIENT_STORAGE",
+    "message": "root independent full-pipeline admission needs 23520129351 additional bytes plus 2147483648 reserve; 14508658688 bytes free. Corpus/model/epochs remain unchanged."
+  },
+  "free_bytes": 14508650496,
+  "full_pipeline_required_bytes_including_reserve": 25667612999,
+  "training": "not_started",
+  "unrun_cells": 8,
+  "final_exposures": 0,
+  "export_available": false,
+  "released_discovery_source_boxes": 45,
+  "legacy_folios_unchanged": 6,
+  "existing_receipts_preserved": 53,
+  "new_api_calls": 0,
+  "limits": [
+    "Source preparation and integrity are not detector or scientific outcome evidence",
+    "No actual Linux CUDA execution or independent human validation"
+  ]
+}

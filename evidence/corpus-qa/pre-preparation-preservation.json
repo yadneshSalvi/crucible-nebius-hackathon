@@ -1,0 +1,14 @@
+{
+  "legacy_folio_hashes": {
+    "occupancy": "7f26dbedcd8873baebe9238c3c6c63766da0a8ab07e0adaf37451093bae12f9d",
+    "synthetic": "a1cd1ff42923913cc4252317a95735d6005c187d1a765b0a317b24888c1851ae",
+    "8dde382738104c9a": "14d103096fb9f03dc03e0fdbbac6ed3c8e3a745dc99d0720fe4b360ee5549d89",
+    "55c57bee412a4f08": "4b9b7f708d0742e85a79a7250d497e68d1597f1b8e4d7ff77d5871c4d57a4655",
+    "be5e5c2505ab45cd": "d0425b190acda370169e15837fe154e1c114ed4f241a74a061dbaa9b9f8e9728",
+    "86e95abb99ee458f": "3b8bce489b92171f9d844a3fd87575393183539deb8eab0e76c7312855038133"
+  },
+  "service_receipt_count": 53,
+  "receipt_bytes_sha256": "c31457cde4dba6d77c6ebe9765234189f2b8f6a50d6699a04ec7df9257f336f9",
+  "wheat_exposures": 0,
+  "holdouts": 2
+}

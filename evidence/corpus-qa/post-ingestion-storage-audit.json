@@ -1,0 +1,16 @@
+{
+  "source_image_bytes_already_ingested": 6452120850,
+  "latest_adam_states_bytes": 1811939328,
+  "atomic_checkpoint_temp_bytes": 603979776,
+  "three_final_models_bytes": 603979776,
+  "prediction_arrays_upper_bound_bytes": 5438304000,
+  "ancillary_outputs_budget_bytes": 805306368,
+  "portable_zip_upper_bound_bytes": 14122402375,
+  "canonical_model_slots_credit_bytes": 0,
+  "remaining_full_pipeline_bytes": 23520129351,
+  "reserve_bytes": 2147483648,
+  "scope": "Separate ingestion gate; complete corpus/3seeds/10epochs and one ZIP. Only hash-bound canonical model slots offset their capped allocated bytes; atomic, prediction, ancillary and ZIP reserves remain protected for retries. Lossless float64 NPZ bound assumes full cap, not favorable outcomes.",
+  "free_bytes": 14724390912,
+  "shortfall_bytes": 10943222087,
+  "no_case_preparation_or_training": true
+}

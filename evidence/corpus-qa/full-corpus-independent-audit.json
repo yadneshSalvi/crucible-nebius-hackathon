@@ -1,0 +1,36 @@
+{
+  "schema": "crucible.root-full-corpus-audit/v1",
+  "status": "PASSED",
+  "auditor_sha256": "921e623eb6736ca782d7445e41f05e5c38f41a31f23cebacff0de49ba67c55ed",
+  "manifest_path": "/Users/yadneshsalvi/code/hackathons/nebius-nvidia-hackathon/crucible/runtime/wheat-assets/manifest.json",
+  "role_plan_sha256": "bb64df545f2c51264a512a4c1e4cd275bc7a90d01705ce1a5f54cb6dc6c12e9f",
+  "manifest_sha256": "b7c7c45c33b7bf0586766ca87cd302ae79a69b6736e27a864267cdff626431aa",
+  "downloaded_images": 3653,
+  "image_bytes": 6452120850,
+  "planned_roles": {
+    "train": 3011,
+    "final": 210,
+    "discovery": 432
+  },
+  "retained_roles": {
+    "train": 3011,
+    "final": 210,
+    "discovery": 432
+  },
+  "cross_role_exact_pixel_duplicate_groups": [],
+  "cross_role_images_quarantined": 0,
+  "byte_sha_crc_decode_checks": 3653,
+  "actual_encoded_formats": {
+    "JPEG": 401,
+    "PNG": 3252
+  },
+  "source_filename_note": "Archive filenames end .png; actual file signatures/codecs are audited without reencoding",
+  "audit_records_sha256": "238a3caa95a8f788086b721246b8293fa2bcfb4d79995c2bcb9656652648cac7",
+  "seconds": 61.905,
+  "limits": [
+    "No detector execution or final metrics",
+    "No full archive digest claim",
+    "Exact decoded pixels do not detect all near duplicates or overlapping plots",
+    "Automated independent reconstruction; no human review"
+  ]
+}

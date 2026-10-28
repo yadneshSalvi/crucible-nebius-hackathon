@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import dotenv_values
+from science.wheat_runtime import device_name
 
 PROJECT = Path(__file__).resolve().parents[1]
 
@@ -22,6 +23,8 @@ class Settings:
     wheat_manifest: Path | None = None
     wheat_initialization: Path | None = None
     wheat_python: Path | None = None
+    wheat_device: str = "mps"
+    wheat_inference_device: str = "cpu"
 
     @classmethod
     def read(cls) -> "Settings":
@@ -52,6 +55,8 @@ class Settings:
             wheat_manifest=Path(setting("CRUCIBLE_WHEAT_MANIFEST")).resolve() if setting("CRUCIBLE_WHEAT_MANIFEST") else None,
             wheat_initialization=Path(setting("CRUCIBLE_WHEAT_INITIALIZATION")).resolve() if setting("CRUCIBLE_WHEAT_INITIALIZATION") else None,
             wheat_python=Path(setting("CRUCIBLE_WHEAT_PYTHON")).absolute() if setting("CRUCIBLE_WHEAT_PYTHON") else None,
+            wheat_device=device_name(setting("CRUCIBLE_WHEAT_DEVICE", "mps")),
+            wheat_inference_device=device_name(setting("CRUCIBLE_WHEAT_INFERENCE_DEVICE", "cpu")),
         )
 
     def public(self) -> dict:

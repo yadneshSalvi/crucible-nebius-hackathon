@@ -81,18 +81,62 @@ def full_storage_plan(root, manifest):
     ancillary = 768 * 1024**2
     portable = math.ceil((images + 3 * model + 128 * 1024**2 + predictions + ancillary) * 1.05) + 16 * 1024**2
     total = resumes + atomic + 3 * model + 128 * 1024**2 + predictions + ancillary + portable
-    seen, existing = set(), 0
-    for path in Path(root).rglob("*"):
-        if not path.is_file() or path.relative_to(root).parts[0] in ("images", "source", "sealed", "frozen_source"):
-            continue
+    root = Path(root).resolve()
+    # Source bytes passed a separate ingestion gate. Worker-input aliases and
+    # failed/unreferenced outputs cannot offset required future allocations.
+    seen = set()
+    for directory in ("images", "source", "sealed", "frozen_source"):
+        for path in (root / directory).rglob("*"):
+            if path.is_file():
+                stat = path.stat()
+                seen.add((stat.st_dev, stat.st_ino))
+
+    def regular(path):
+        # Exclude both symlinked files and symlinked parent directories.
+        return path.resolve() == path and path.is_file()
+
+    def retained_json(path):
+        if regular(path):
+            try:
+                value = read_json(path)
+                return value if isinstance(value, dict) else {}
+            except ScienceError:
+                pass
+        return {}
+
+    def credit(path, expected_hash, cap):
+        if not isinstance(expected_hash, str) or len(expected_hash) != 64 or not regular(path):
+            return 0
         stat = path.stat()
-        if (stat.st_dev, stat.st_ino) not in seen:
-            seen.add((stat.st_dev, stat.st_ino))
-            existing += stat.st_size
+        identity = (stat.st_dev, stat.st_ino)
+        if identity in seen or file_hash(path) != expected_hash:
+            return 0
+        seen.add(identity)
+        # Sparse logical length is not already-allocated capacity. No credit on
+        # platforms where allocated-byte accounting is unavailable.
+        return min(cap, stat.st_size, getattr(stat, "st_blocks", 0) * 512)
+
+    existing = 0
+    plan = retained_json(root / "training-plan.json")
+    if plan.get("training") == TRAINING:
+        initialization = plan.get("initialization") or {}
+        if isinstance(initialization, dict):
+            existing += credit(root / "model" / "initialization.pt", initialization.get("sha256"), 128 * 1024**2)
+        for seed in TRAINING["seeds"]:
+            seed_root = root / "model" / ("seed-" + str(seed))
+            epochs = seed_root / "epochs"
+            diagnostics = [retained_json(epochs / ("epoch-%02d.json" % epoch)) for epoch in range(1, TRAINING["epochs"] + 1)]
+            completed = [row for epoch, row in enumerate(diagnostics, 1) if row.get("epoch") == epoch]
+            if completed:
+                existing += credit(epochs / "latest-resume.pt", completed[-1].get("resumable_checkpoint_sha256_at_epoch"), 576 * 1024**2)
+            fit = retained_json(seed_root / "training-receipt.json")
+            if fit.get("plan_sha256") == digest({**plan, "seed": seed}) and fit.get("epochs_completed") == TRAINING["epochs"]:
+                existing += credit(epochs / "epoch-10.pt", fit.get("checkpoint_sha256"), model)
     return {"source_image_bytes_already_ingested": images, "latest_adam_states_bytes": resumes, "atomic_checkpoint_temp_bytes": atomic,
             "three_final_models_bytes": 3 * model, "prediction_arrays_upper_bound_bytes": predictions, "ancillary_outputs_budget_bytes": ancillary,
-            "portable_zip_upper_bound_bytes": portable, "remaining_full_pipeline_bytes": max(0, total - existing), "reserve_bytes": DISK_RESERVE,
-            "scope": "Separate ingestion gate; complete corpus/3seeds/10epochs and one ZIP. Lossless float64 NPZ bound assumes full cap, not favorable outcomes."}
+            "portable_zip_upper_bound_bytes": portable, "canonical_model_slots_credit_bytes": existing,
+            "remaining_full_pipeline_bytes": total - existing, "reserve_bytes": DISK_RESERVE,
+            "scope": "Separate ingestion gate; complete corpus/3seeds/10epochs and one ZIP. Only hash-bound canonical model slots offset their capped allocated bytes; atomic, prediction, ancillary and ZIP reserves remain protected for retries. Lossless float64 NPZ bound assumes full cap, not favorable outcomes."}
 
 
 def code_digests():
@@ -164,7 +208,11 @@ def _normalize_records(source, base):
             raise ScienceError("SOURCE_HASH_MISMATCH", "Image differs from asset manifest: " + image_id)
         with Image.open(path) as image:
             width, height = image.size
+            encoded_format = image.format
+            media_type = Image.MIME.get(encoded_format, "application/octet-stream")
             pixel_sha = __import__("hashlib").sha256(image.convert("RGB").tobytes()).hexdigest()
+        if row.get("encoded_format", encoded_format) != encoded_format:
+            raise ScienceError("SOURCE_HASH_MISMATCH", "Declared image codec differs from source bytes: " + image_id)
         if row.get("pixel_sha256") is not None and row["pixel_sha256"] != pixel_sha:
             raise ScienceError("SOURCE_HASH_MISMATCH", "Declared decoded pixel hash changed: " + image_id)
         if (width, height) != (row.get("width", width), row.get("height", height)) or width != 1024 or height != 1024:
@@ -207,6 +255,7 @@ def _normalize_records(source, base):
             converted.append(checked_box(box, width, height))
         result.append({"image_id": image_id, "split": role, "session_id": session, "group_id": group,
                        "width": width, "height": height, "sha256": sha, "pixel_sha256": pixel_sha,
+                       "encoded_format": encoded_format, "media_type": media_type,
                        "source_path": path, "boxes": converted, "original_bbox_format": fmt,
                        "annotation_provenance": annotation_provenance})
     if {row["split"] for row in result} != {"train", "discovery", "confirmation"}:
@@ -225,7 +274,7 @@ def prepare(request):
     source_path = Path(request["source_manifest"]).resolve()
     source = read_json(source_path)
     dependency_bytes = {}
-    for name in ("requirements-wheat.txt", "requirements-wheat.lock"):
+    for name in ("requirements-wheat.txt", "requirements-wheat.lock", "requirements-wheat-linux-cuda.lock"):
         dependency_path = Path(__file__).parent.parent / name
         if not dependency_path.is_file():
             raise ScienceError("DEPENDENCY_LOCK_REQUIRED", "Preparation needs the checked-in full wheat requirements and hash lock")
@@ -257,7 +306,7 @@ def prepare(request):
         labels = immutable_json(root / "sealed" / (image_id + ".json"), {"image_id": image_id, "boxes": row["boxes"]})
         labels.chmod(0o600)
         public = {key: value for key, value in row.items() if key not in ("source_path", "boxes")}
-        public["image"] = {**artifact(root, image, "wheat_image", "image/jpeg" if suffix in (".jpg", ".jpeg") else "image/png"), "private": role == "confirmation"}
+        public["image"] = {**artifact(root, image, "wheat_image", row["media_type"]), "private": role == "confirmation"}
         public["labels"] = {**artifact(root, labels, "sealed_boxes"), "private": True}
         manifest["splits"][role].append(public)
         all_artifacts += [public["image"], public["labels"]]
@@ -291,7 +340,7 @@ def prepare(request):
                 "confirmation_split_sha256": manifest["confirmation_split_sha256"], "numerical_spec_sha256": digest(SPEC),
                 "trusted_code": code_digests(), "trusted_code_sha256": digest(code_digests()), "source_files": frozen,
                 "source_snapshot_dir": "frozen_source", "data_artifacts": all_artifacts,
-                "dependencies": {"files": dependencies, "provenance": "Exact checked-in requirements-wheat.txt and full hash-locked transitive requirements-wheat.lock bytes, frozen at preparation. Installation recipe; actual executed environment is reported separately in per-seed training receipts."},
+                "dependencies": {"files": dependencies, "provenance": "Exact checked-in requirements-wheat.txt, full transitive requirements-wheat.lock and supplemental requirements-wheat-linux-cuda.lock bytes, frozen at preparation. Installation recipes only; Linux/CUDA installation and execution remain unqualified until actual host checks and receipts. Actual executed environments are reported separately in per-seed training receipts."},
                 "artifacts": [a for a in all_artifacts if not a.get("private") and (a["kind"] != "wheat_image" or a["sha256"] == illustration["sha256"])], "limitations": LIMITATIONS[:],
                 "storage": {"ingestion": ingestion, "full_pipeline": full_storage_plan(root, manifest), "materialization": "Verified same-filesystem hardlinks. Every-stage hash checks detect source mutation; no separate storage identity. Cross-filesystem fallback budgeted before copying."},
                 "illustration": {key: value for key, value in illustration.items() if key != "labels"},
@@ -323,9 +372,12 @@ def _context(request):
 
 
 def _minimal_environment():
-    return {"PATH": os.defpath, "PYTHONPATH": str(Path(__file__).parent.parent), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUNBUFFERED": "1",
+    environment = {"PATH": os.defpath, "PYTHONPATH": str(Path(__file__).parent.parent), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUNBUFFERED": "1",
             "PYTHONHASHSEED": "0", "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1",
             "MKL_NUM_THREADS": "1", "TZ": "UTC", "LANG": "en_US.UTF-8", "PYTORCH_ENABLE_MPS_FALLBACK": "1"}
+    # Preserve the scheduler's logical GPU namespace, including an empty mask.
+    environment.update({key: os.environ[key] for key in ("CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER") if key in os.environ})
+    return environment
 
 
 def _worker(task, attempt, training=False):
@@ -953,7 +1005,7 @@ print('Fixed evidence replay complete; this is not fresh confirmation or retrain
     extras = {"replay-request.json": canonical_bytes(replay) + b"\n", "reproduce.py": script.encode()}
     for name, record in prepared["dependencies"]["files"].items():
         extras[name] = verify_file(root, record).read_bytes()
-    extras["README-REPRODUCE.md"] = ("# Wheat finite-corpus evidence\n\nNew source-informed experiment, not WILDS reproduction. The exact checked-in Python3.13 requirements and full transitive hash lock were frozen at preparation: install with `python3.13 -m pip install --require-hashes -r requirements-wheat.lock` (or use a prepared wheelhouse). The lock is an installation recipe; executed environments are recorded separately in " + receipt_locations + ".\n\nRun `python reproduce.py --verify-only` for read-only hash checking; missing capsule aliases are verified against canonical bytes without materializing the historical training copies. `--metrics-only` recomputes independent metrics without importing Torch. The default performs fresh fixed-checkpoint inference and re-verifies metrics; it is neither retraining nor fresh confirmation. After dependency installation no network, model service or provider key is required.\n\nThe training/export space budget covers one ZIP only. Extraction and replay require separate space: see manifest.json workspace.canonical_extraction_bytes_upper_bound plus workspace.fresh_inference.additional_bytes (or metrics_only.additional_bytes), plus its reserve. These are additional to the ZIP and installed dependencies. Admission checks actual canonical image/model sizes, retained predictions and schedules before creating any capsule alias, request or replay attempt. Full-copy fallback is reserved for every missing required final alias and new capsule, even if hardlinks succeed. Only the final capsule required by the oracle is reconstructed; other historical aliases remain logical references.\n\nOriginal attribution/rights and unresolved source differences remain in case/prepared.json and case/source/asset-manifest.json.\n").encode()
+    extras["README-REPRODUCE.md"] = ("# Wheat finite-corpus evidence\n\nNew source-informed experiment, not WILDS reproduction. The exact checked-in Python3.13 requirements and full transitive hash lock were frozen at preparation: install with `python3.13 -m pip install --require-hashes -r requirements-wheat.lock` (or use a prepared wheelhouse). The supplemental requirements-wheat-linux-cuda.lock provides a separately resolved CPython3.13/Linux x86_64 CUDA installation recipe. Linux/CUDA installation and hardware execution remain unqualified until actual host checks and receipts; including this lock is not execution evidence. Locks are installation recipes; executed environments are recorded separately in " + receipt_locations + ".\n\nRun `python reproduce.py --verify-only` for read-only hash checking; missing capsule aliases are verified against canonical bytes without materializing the historical training copies. `--metrics-only` recomputes independent metrics without importing Torch. The default performs fresh fixed-checkpoint inference and re-verifies metrics; it is neither retraining nor fresh confirmation. After dependency installation no network, model service or provider key is required.\n\nThe training/export space budget covers one ZIP only. Extraction and replay require separate space: see manifest.json workspace.canonical_extraction_bytes_upper_bound plus workspace.fresh_inference.additional_bytes (or metrics_only.additional_bytes), plus its reserve. These are additional to the ZIP and installed dependencies. Admission checks actual canonical image/model sizes, retained predictions and schedules before creating any capsule alias, request or replay attempt. Full-copy fallback is reserved for every missing required final alias and new capsule, even if hardlinks succeed. Only the final capsule required by the oracle is reconstructed; other historical aliases remain logical references.\n\nOriginal attribution/rights and unresolved source differences remain in case/prepared.json and case/source/asset-manifest.json.\n").encode()
     hashes = {name: file_hash(path) for name, path in files.items()}
     hashes.update({name: hashes[target] for name, target in aliases.items()})
     hashes.update({name: __import__("hashlib").sha256(content).hexdigest() for name, content in extras.items()})

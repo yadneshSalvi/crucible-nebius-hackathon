@@ -16,6 +16,7 @@ from pathlib import Path
 
 from .common import ScienceError, atomic_result, canonical_bytes, digest, file_hash, immutable_bytes, immutable_json, read_json, utc_now
 from .wheat import RECIPES, SPEC, TRAINING, training_order
+from .wheat_runtime import bind_runtime, capture_rng, precision_policy, restore_rng, runtime_identity, seed_rng, select_device, synchronize
 
 
 def _libraries():
@@ -49,27 +50,25 @@ def _model(torchvision, initialized=False):
 
 
 def _device(torch, name):
-    if name not in ("cpu", "mps") or (name == "mps" and not torch.backends.mps.is_available()):
-        raise ScienceError("WHEAT_HARDWARE", "Frozen requested CPU/MPS device is unavailable; no silent device replacement", True)
-    return torch.device(name)
+    return select_device(torch, name)
 
 
 def _sync(torch, device):
-    if device.type == "mps":
-        torch.mps.synchronize()
+    synchronize(torch, device)
 
 
 def _tensor(image, torch, np, device):
     return torch.from_numpy(np.array(image, dtype=np.float32).transpose(2, 0, 1).copy() / 255.0).to(device)
 
 
-def _receipt(started_at, started, cpu_start, device, environment):
+def _receipt(started_at, started, cpu_start, device, environment, runtime):
     usage = resource.getrusage(resource.RUSAGE_SELF)
     return {"started_at": started_at, "completed_at": utc_now(), "wall_seconds": time.perf_counter() - started, "cpu_seconds": time.process_time() - cpu_start,
             "peak_rss_bytes": int(usage.ru_maxrss if platform.system() == "Darwin" else usage.ru_maxrss * 1024),
             "device": str(device), "environment": environment, "threads": 1,
-            "mps_fallback_enabled": os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK") == "1",
-            "mps_fallback_caveat": "Fallback is enabled for unsupported operators; requested device is recorded, not a claim that every operator ran on GPU",
+            "runtime_binding": runtime, "runtime_binding_sha256": digest(runtime), "precision": runtime["precision"],
+            "mps_fallback_enabled": runtime["mps_operator_fallback_enabled"],
+            "mps_fallback_caveat": "Fallback is enabled for unsupported operators; requested device is recorded, not a claim that every operator ran on GPU" if runtime["mps_operator_fallback_enabled"] else None,
             "provider_credentials_present": any("API_KEY" in key or "TOKEN" in key for key in os.environ), "pid": os.getpid()}
 
 
@@ -95,12 +94,15 @@ def train_model(task_path, output):
     initial = Path(task["initialization"])
     if file_hash(initial) != plan["initialization"]["sha256"]:
         raise ScienceError("INITIALIZATION_MISMATCH", "Initialization bytes changed")
-    torch.manual_seed(plan["seed"])
-    if torch.backends.mps.is_available():
-        torch.mps.manual_seed(plan["seed"])
     # Deterministic algorithms can be unavailable on MPS. Their availability is
     # not fabricated: fixed seeds and actual inference agreement are separate.
     device = _device(torch, plan["device"])
+    precision = precision_policy(torch, device)
+    runtime = runtime_identity(torch, device, environment, precision)
+    epoch_dir = Path(task["resume_dir"]).resolve()
+    runtime_sha256 = bind_runtime(epoch_dir, runtime)
+    seed_rng(torch, device, plan["seed"])
+    _sync(torch, device)
     started_at, started, cpu_start = utc_now(), time.perf_counter(), time.process_time()
     model = _model(torchvision, initialized=True)
     initial_state = torch.load(initial, map_location="cpu", weights_only=True)
@@ -117,26 +119,23 @@ def train_model(task_path, output):
         trainable = ["layer4", "layer3", "layer2", "layer1", "conv1"][:TRAINING["trainable_backbone_layers"]]
         for name, parameter in model.backbone.body.named_parameters():
             parameter.requires_grad_(any(name.startswith(prefix) for prefix in trainable))
-    model.to(device)
+    model.to(device=device, dtype=torch.float32)
     optimizer = torch.optim.Adam([p for p in model.parameters() if p.requires_grad], lr=TRAINING["learning_rate"],
                                 betas=tuple(TRAINING["betas"]), eps=TRAINING["epsilon"], weight_decay=TRAINING["weight_decay"])
-    epoch_dir = Path(task["resume_dir"]).resolve()
-    epoch_dir.mkdir(parents=True, exist_ok=True)
     latest = epoch_dir / "latest-resume.pt"
     start_epoch, history = 0, []
     if latest.exists():
         resume = torch.load(latest, map_location="cpu", weights_only=True)
         if resume["plan_sha256"] != digest(plan):
             raise ScienceError("TRAINING_PLAN_CHANGED", "Resumable checkpoint belongs to another frozen training plan")
+        # Reject mismatched runtime/RNG before mutating model or optimizer state.
+        restore_rng(torch, device, resume, runtime_sha256)
         model.load_state_dict(resume["model"])
         optimizer.load_state_dict(resume["optimizer"])
         for state in optimizer.state.values():
             for key, value in state.items():
                 if torch.is_tensor(value):
                     state[key] = value.to(device)
-        torch.set_rng_state(resume["cpu_rng"])
-        if device.type == "mps" and resume.get("mps_rng") is not None:
-            torch.mps.set_rng_state(resume["mps_rng"])
         start_epoch, history = resume["epoch"], resume["history"]
     rows = task["training"]
     if not rows or [row["image_id"] for row in rows] != sorted(row["image_id"] for row in rows):
@@ -145,6 +144,7 @@ def train_model(task_path, output):
         if set(row) != {"image_id", "image", "sha256", "boxes"} or Path(row["image"]).name != row["image"] or file_hash(row["image"]) != row["sha256"]:
             raise ScienceError("TRAINING_INPUT_SCHEMA", "Invalid training capsule or image hash")
     for epoch in range(start_epoch + 1, TRAINING["epochs"] + 1):
+        _sync(torch, device)
         epoch_started = time.perf_counter()
         model.train()
         losses, component_sums, optimizer_steps = [], {}, 0
@@ -162,8 +162,9 @@ def train_model(task_path, output):
                 targets.append({"boxes": boxes, "labels": torch.ones(len(boxes), dtype=torch.int64, device=device)})
                 images.append(_tensor(image, torch, np, device))
             optimizer.zero_grad(set_to_none=True)
-            loss_dict = model(images, targets)
-            loss = sum(loss_dict.values())
+            with torch.autocast(device_type=device.type, enabled=False):
+                loss_dict = model(images, targets)
+                loss = sum(loss_dict.values())
             if not bool(torch.isfinite(loss).detach().cpu()):
                 raise ScienceError("NONFINITE_TRAINING", "Frozen training produced nonfinite loss; no checkpoint selected")
             loss.backward()
@@ -180,8 +181,9 @@ def train_model(task_path, output):
         history.append(record)
         cpu_state = {key: value.detach().cpu() for key, value in model.state_dict().items()}
         _save_torch(torch, latest, {"model": cpu_state, "optimizer": optimizer.state_dict(), "epoch": epoch, "history": history,
-                                  "plan_sha256": digest(plan), "cpu_rng": torch.get_rng_state(), "mps_rng": torch.mps.get_rng_state() if device.type == "mps" else None})
+                                  "plan_sha256": digest(plan), "runtime_binding_sha256": runtime_sha256, **capture_rng(torch, device)})
         immutable_json(epoch_dir / ("epoch-%02d.json" % epoch), {**record, "resumable_checkpoint_sha256_at_epoch": file_hash(latest),
+                      "runtime_binding_sha256": runtime_sha256,
                       "checkpoint_retention": "Latest resumable checkpoint replaced each completed epoch; final epoch model retained immutably. Past epoch diagnostics/hashes retained; past checkpoint bytes not retained."})
         print(canonical_bytes({"stage": "epoch_complete", **record}).decode(), flush=True)
     final = epoch_dir / "epoch-10.pt"
@@ -191,7 +193,8 @@ def train_model(task_path, output):
         retained = torch.load(final, map_location="cpu", weights_only=True)
         if set(retained) != set(model.state_dict()) or any(not torch.equal(retained[key], value.detach().cpu()) for key, value in model.state_dict().items()):
             raise ScienceError("CHECKPOINT_MISMATCH", "Existing final model differs from resumed fixed epoch10 state")
-    receipt = {**_receipt(started_at, started, cpu_start, device, environment), "schema_version": "crucible.wheat.training.v1",
+    _sync(torch, device)
+    receipt = {**_receipt(started_at, started, cpu_start, device, environment, runtime), "schema_version": "crucible.wheat.training.v1",
                "training": TRAINING, "plan_sha256": digest(plan), "contract_signature": plan["contract_signature"],
                "initialization_sha256": plan["initialization"]["sha256"], "training_split_sha256": plan["training_split_sha256"],
                "training_images": len(rows), "evaluation_images_used": 0, "epochs_completed": TRAINING["epochs"], "resumed_after_epoch": start_epoch,
@@ -199,7 +202,8 @@ def train_model(task_path, output):
                "checkpoint_sha256": file_hash(final), "seed": plan["seed"], "tuning_trials": 0,
                "selection": TRAINING["selection"], "total_epoch_wall_seconds": sum(row["wall_seconds"] for row in history),
                "mps_allocated_bytes_at_completion": torch.mps.current_allocated_memory() if device.type == "mps" else None,
-               "determinism": "Fixed seeds and recipe; no promise of bitwise-identical MPS retraining. Replay checks actual checkpoint inference within frozen tolerances."}
+               "cuda_allocated_bytes_at_completion": torch.cuda.memory_allocated(device) if device.type == "cuda" else None,
+               "determinism": "Fixed seeds and recipe; no promise of bitwise-identical accelerator retraining. Replay checks actual checkpoint inference within frozen tolerances."}
     output.mkdir(parents=True, exist_ok=True)
     atomic_result(output / "result.json", {"checkpoint": {"sha256": file_hash(final), "bytes": final.stat().st_size}, "receipt": receipt})
 
@@ -239,11 +243,15 @@ def _predict_one(task_path, output, task=None):
         if file_hash(row["image"]) != row["sha256"]:
             raise ScienceError("ARTIFACT_TAMPERED", "Evaluation image changed")
     device = _device(torch, task["device"])
+    precision = precision_policy(torch, device)
+    runtime = runtime_identity(torch, device, environment, precision)
+    bind_runtime(output, runtime)
+    _sync(torch, device)
     started_at, started, cpu_start = utc_now(), time.perf_counter(), time.process_time()
-    torch.manual_seed(task["seed"])
+    seed_rng(torch, device, task["seed"])
     model = _model(torchvision)
     model.load_state_dict(torch.load(task["checkpoint"]["path"], map_location="cpu", weights_only=True), strict=True)
-    model.to(device).eval()
+    model.to(device=device, dtype=torch.float32).eval()
     from sahi.models.torchvision import TorchVisionDetectionModel
     from sahi.predict import get_sliced_prediction
     from sahi.postprocess.combine import NMSPostprocess
@@ -269,7 +277,7 @@ def _predict_one(task_path, output, task=None):
     from .wheat_storage import PredictionWriter
     writer = PredictionWriter()
     total_calls, total_pixels, record_count = 0, 0, 0
-    with torch.inference_mode():
+    with torch.inference_mode(), torch.autocast(device_type=device.type, enabled=False):
         for row in task["images"]:
             for recipe_id in task["recipe_ids"]:
                 recipe = next(r for r in RECIPES if r["id"] == recipe_id)
@@ -332,7 +340,8 @@ def _predict_one(task_path, output, task=None):
                 print(canonical_bytes({"stage": "prediction_complete", "image_id": row["image_id"], "recipe_id": recipe_id,
                                       "forward_calls": observed["calls"], "wall_seconds": elapsed}).decode(), flush=True)
     prediction_path = writer.publish(output)
-    receipt = {**_receipt(started_at, started, cpu_start, device, environment), "schema_version": "crucible.wheat.prediction.v1",
+    _sync(torch, device)
+    receipt = {**_receipt(started_at, started, cpu_start, device, environment, runtime), "schema_version": "crucible.wheat.prediction.v1",
                "evaluation_labels_present": False, "seed": task["seed"], "contract_signature": task["contract_signature"], "split": task["split"], "recipe_ids": task["recipe_ids"],
                "numerical_spec_sha256": digest(SPEC), "checkpoint_sha256": task["checkpoint"]["sha256"], "corpus_sha256": task["corpus_sha256"],
                "input_manifest_sha256": file_hash(task_path), "predictions_sha256": file_hash(prediction_path), "prediction_records": record_count,

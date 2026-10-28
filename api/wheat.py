@@ -31,6 +31,14 @@ def _require(condition, code: str, message: str):
         raise Conflict(code, message)
 
 
+def _preserve_released_illustration(previous: dict, prepared: dict) -> dict:
+    if (previous.get("ground_truth_released") is True and previous.get("split") == "discovery" and prepared.get("split") == "discovery"
+            and previous.get("id") == prepared.get("id") and previous.get("sha256") == prepared.get("sha256")):
+        fields = ("ground_truth_released", "targets", "license", "attribution", "source_url", "selection_rule")
+        return {**prepared, **copy.deepcopy({key: previous[key] for key in fields if key in previous})}
+    return prepared
+
+
 class WheatOrchestrator(Orchestrator):
     def __init__(self, settings: Settings, store: Store):
         super().__init__(settings, store)
@@ -53,6 +61,10 @@ class WheatOrchestrator(Orchestrator):
             doc = self.store.get(STUDY_ID)
         if doc.get("asset") is None:
             self._publish_discovery_illustration()
+        elif (doc.get("prepared") and doc["asset"].get("ground_truth_released") is False and doc["asset"].get("split") == "discovery"
+              and doc["asset"].get("sha256") == "2454d9090c4fafadd7c7d24840eb1d2e049b7c9fc2f7f4fb3fb78a84ad0fa917"
+              and any(item.get("kind") == "source_selection" for item in doc.get("artifacts", []))):
+            self._publish_discovery_illustration(restoring=True)
         if not doc.get("prepared") and not doc.get("source_compilation"):
             known = {field["key"] for field in doc["source_fields"]}
             additions = [field for field in source_fields() if field["key"] not in known]
@@ -66,7 +78,7 @@ class WheatOrchestrator(Orchestrator):
                 current.setdefault("source_compilation_history", []).append(copy.deepcopy(current["source_compilation"]))
             self.store.mutate(STUDY_ID, label_previous, ("source_method_clarified", "Historical source call labeled as audited-summary structuring; its exact request, response and usage remain retained."))
 
-    def _publish_discovery_illustration(self):
+    def _publish_discovery_illustration(self, restoring=False):
         """Release only the preselected discovery photo while full bytes wait."""
         assets = self.source_manifest.parent
         selection_file = assets / "illustration-selection.json"
@@ -105,16 +117,22 @@ class WheatOrchestrator(Orchestrator):
             "coordinate_schema": "Official BoxesString continuous xyxy converted to UI xywh; source values retained",
             "detection_status": "No detector predictions or experiment measurements exist"}, "wheat-discovery-illustration.json", "source_selection")
         def publish(doc):
+            if restoring:
+                _require(doc.get("asset", {}).get("id") == Path(image_name).stem and doc["asset"].get("sha256") == sha and doc["asset"].get("split") == "discovery",
+                         "illustration_identity_invalid", "Previously released annotations cannot attach to a different prepared photograph.")
             doc["asset"] = {"id": Path(image_name).stem, "url": "/api/artifacts/" + sha, "width": width, "height": height,
                 "sha256": sha, "license": "Zenodo: CC BY 4.0; WILDS description: MIT. Both source statements retained.",
                 "attribution": "Global Wheat Head Dataset 2021 contributors · Rothamsted Research · Rres_1",
                 "source_url": "https://zenodo.org/records/5092309", "session_id": "Rres_1", "split": "discovery",
                 "ground_truth_released": True, "targets": targets, "selection_rule": selection["selection_rule"]}
-            doc["artifacts"].extend([image_artifact, receipt])
-            doc["source_fields"].append({"key": "illustration_selection", "label": "Preselected discovery photograph", "candidates": [],
+            known = {item["sha256"] for item in doc["artifacts"]}
+            doc["artifacts"].extend(item for item in (image_artifact, receipt) if item["sha256"] not in known)
+            if not any(field.get("key") == "illustration_selection" for field in doc["source_fields"]):
+                doc["source_fields"].append({"key": "illustration_selection", "label": "Preselected discovery photograph", "candidates": [],
                 "status": "reviewer_chosen", "selected_value": image_name,
                 "reason": "Lexicographically first image in the declared Rres_1 development session, selected before detector outcomes. Authentic source boxes are released; detector results remain unrun."})
-        self.store.mutate(STUDY_ID, publish, ("discovery_source_released", "Qualified discovery photograph and its source annotations released; no predictions fabricated."))
+        event = ("discovery_source_restored", "Previously released discovery annotations and attribution restored after preparation; no new labels or predictions released.") if restoring else ("discovery_source_released", "Qualified discovery photograph and its source annotations released; no predictions fabricated.")
+        self.store.mutate(STUDY_ID, publish, event)
 
     def public(self) -> dict:
         self.ensure()
@@ -135,9 +153,16 @@ class WheatOrchestrator(Orchestrator):
             catalog = json.loads(catalog_path.read_text())
             count = len(catalog.get("images", []))
             missing = len(catalog.get("missing_images", []))
-            doc["source_readiness"] = {"status": "incomplete", "required_images": count, "missing_images": missing,
-                "available_images": count - missing, "detail": "The full declared corpus must pass source-byte, dimension and duplicate checks before fitting. No smaller corpus is silently substituted."}
-            doc["training"]["detail"] = f"{missing:,} of {count:,} declared source photographs are not yet available. Full-corpus preparation and real training remain gated."
+            available = count > 0 and missing == 0
+            doc["source_readiness"] = {"status": "available" if available else "incomplete", "required_images": count, "missing_images": missing,
+                "available_images": count - missing, "detail": (
+                    "All declared source photographs are available. Study preparation must recheck and freeze the source inputs before fitting. Detector training has not run."
+                    if available else
+                    "The full declared corpus must pass source-byte, dimension and duplicate checks before fitting. No smaller corpus is silently substituted.")}
+            doc["training"]["detail"] = (
+                f"All {count:,} declared source photographs are available. Study preparation and detector training remain pending."
+                if available else
+                f"{missing:,} of {count:,} declared source photographs are not yet available. Full-corpus preparation and real training remain gated.")
         return doc
 
     def capabilities(self, doc: dict) -> list[str]:
@@ -184,7 +209,8 @@ class WheatOrchestrator(Orchestrator):
         payload = copy.deepcopy((resume_from or {}).get("payload", payload or {}))
         contract = copy.deepcopy(doc.get("contract", {}))
         input_data = {"root": str(self.case_root), "contract": contract, "reproduction_accepted": True,
-                      "registration": doc.get("scientific_registration"), "device": "mps", "inference_device": "cpu"}
+                      "registration": doc.get("scientific_registration"), "device": self.settings.wheat_device,
+                      "inference_device": self.settings.wheat_inference_device}
         if action == "prepare":
             input_data["source_manifest"] = str(self.source_manifest)
         if action == "train":
@@ -286,6 +312,7 @@ class WheatOrchestrator(Orchestrator):
                "PYTHONUNBUFFERED": "1", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONHASHSEED": "0",
                "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
                "VECLIB_MAXIMUM_THREADS": "1", "PYTORCH_ENABLE_MPS_FALLBACK": "1", "TMPDIR": str(directory)}
+        env.update({key: os.environ[key] for key in ("CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER") if key in os.environ})
         started = now()
         process = await asyncio.create_subprocess_exec(*argv, cwd=PROJECT, env=env, stdout=asyncio.subprocess.PIPE,
                                                        stderr=asyncio.subprocess.PIPE, start_new_session=True)
@@ -497,15 +524,18 @@ class WheatOrchestrator(Orchestrator):
                 illustration = result.get("illustration", {})
                 image = illustration.get("image", {})
                 if image.get("sha256"):
-                    doc["asset"] = {"id": illustration["image_id"], "url": "/api/artifacts/" + image["sha256"],
+                    prepared_asset = {"id": illustration["image_id"], "url": "/api/artifacts/" + image["sha256"],
                         "width": illustration["width"], "height": illustration["height"], "sha256": image["sha256"],
                         "license": str(result["source"].get("license", "Source license statements retained in audit")),
                         "attribution": str(result["source"].get("attribution", "Global Wheat Head Dataset contributors")),
                         "source_url": result["source"].get("url", "https://zenodo.org/records/5092309"),
                         "session_id": illustration["session_id"], "split": "discovery", "ground_truth_released": False,
                         "targets": [], "selection_rule": result.get("illustration_selection")}
+                    doc["asset"] = _preserve_released_illustration(doc.get("asset") or {}, prepared_asset)
                 training = contract.get("training", {})
-                doc["training"].update(detector=training.get("model", doc["training"]["detector"]), epochs=training.get("epochs", 10), device="MPS training / CPU inference (capability qualified; actual receipts follow)")
+                device_label = f"{self.settings.wheat_device.upper()} training / {self.settings.wheat_inference_device.upper()} inference"
+                qualification = "software prepared; CUDA execution unqualified" if any(value.startswith("cuda:") for value in (self.settings.wheat_device, self.settings.wheat_inference_device)) else "actual execution receipts pending"
+                doc["training"].update(detector=training.get("model", doc["training"]["detector"]), epochs=training.get("epochs", 10), device=f"{device_label} ({qualification})")
                 doc["source_fields"].append({"key": "executed_training", "label": "Frozen authored detector protocol", "candidates": [],
                     "status": "reviewer_chosen", "selected_value": training,
                     "reason": "Frozen before fitting by the local automated operator. Dataset/initialization/implementation differences prevent an exact-paper reproduction claim."})

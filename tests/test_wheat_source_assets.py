@@ -1,5 +1,6 @@
 """Bounded primary-byte retrieval and coordinate ingestion controls."""
 import importlib.util
+import argparse
 import io
 import hashlib
 import json
@@ -121,3 +122,43 @@ def test_fixed_discovery_selection_preserves_earlier_receipt_and_rejects_reselec
     path.write_text(json.dumps(changed))
     with pytest.raises(ValueError, match="retained illustration"):
         catalog.select_illustration(tmp_path, rows)
+
+
+@pytest.mark.parametrize("encoded_format,media_type", [("JPEG", "image/jpeg"), ("PNG", "image/png")])
+def test_source_codec_is_detected_from_bytes_without_reencoding(tmp_path, encoded_format, media_type):
+    from PIL import Image
+    path = tmp_path / "source.png"
+    Image.new("RGB", (1024, 1024), (17, 83, 190)).save(path, format=encoded_format)
+    original = path.read_bytes()
+    metadata = catalog.inspect_source_image(path)
+    with Image.open(io.BytesIO(original)) as decoded:
+        expected_pixels = hashlib.sha256(decoded.tobytes()).hexdigest()
+    assert metadata == {"sha256": hashlib.sha256(original).hexdigest(), "pixel_sha256": expected_pixels,
+                        "dimensions_verified": True, "encoded_format": encoded_format, "media_type": media_type}
+    assert path.read_bytes() == original
+
+
+def test_unreviewed_source_codec_and_dimensions_fail_without_conversion(tmp_path):
+    from PIL import Image
+    path = tmp_path / "source.png"
+    Image.new("RGB", (1024, 1024)).save(path, format="BMP")
+    original = path.read_bytes()
+    with pytest.raises(ValueError, match="encoding"):
+        catalog.inspect_source_image(path)
+    assert path.read_bytes() == original
+    Image.new("RGB", (16, 16)).save(path, format="JPEG")
+    with pytest.raises(ValueError, match="dimensions"):
+        catalog.inspect_source_image(path)
+
+
+def test_alternate_manifest_keeps_existing_bytes_and_cannot_escape_assets(tmp_path):
+    original = tmp_path / "manifest.json"
+    catalog.immutable(original, b"original audited source metadata\n")
+    alternate = tmp_path / catalog.manifest_filename("manifest-encoded-formats.json")
+    catalog.immutable(alternate, b"corrected encoded-format metadata\n")
+    assert original.read_bytes() == b"original audited source metadata\n"
+    with pytest.raises(ValueError, match="Immutable"):
+        catalog.immutable(original, alternate.read_bytes())
+    for name in ("../manifest.json", "/tmp/manifest.json", "role-plan.json"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            catalog.manifest_filename(name)

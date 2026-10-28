@@ -1,0 +1,84 @@
+{
+  "status": "PASSED",
+  "scope": "Tiny actual CPU/MPS tensor and RNG smoke; no detector initialization, fitting, inference or dataset access",
+  "environment": {
+    "python": "3.13.7",
+    "torch": "2.14.1",
+    "torchvision": "0.29.2",
+    "numpy": "2.5.4",
+    "pillow": "13.0.0",
+    "sahi": "0.12.8",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64"
+  },
+  "results": [
+    {
+      "device": "cpu",
+      "random_state_restored_exactly": true,
+      "fp32_tensor_operation_passed": true,
+      "runtime": {
+        "format": "crucible.wheat-runtime/v1",
+        "selected_device": "cpu",
+        "environment": {
+          "python": "3.13.7",
+          "torch": "2.14.1",
+          "torchvision": "0.29.2",
+          "numpy": "2.5.4",
+          "pillow": "13.0.0",
+          "sahi": "0.12.8",
+          "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+          "machine": "arm64"
+        },
+        "precision": {
+          "parameters": "float32",
+          "inputs": "float32",
+          "autocast_enabled": false,
+          "gradient_scaler_enabled": false,
+          "tf32_enabled": false,
+          "scope": "Full FP32 execution; no AMP, quantization or compiled-model substitution"
+        },
+        "device_fallback": "none",
+        "mps_operator_fallback_enabled": false,
+        "torch_build_sha256": "6d6fa299a6d76bc6add8bfff4916da33cbc1636da24e90df594e6434f918b26c",
+        "deterministic_algorithms_enabled": false
+      }
+    },
+    {
+      "device": "mps",
+      "random_state_restored_exactly": true,
+      "fp32_tensor_operation_passed": true,
+      "runtime": {
+        "format": "crucible.wheat-runtime/v1",
+        "selected_device": "mps",
+        "environment": {
+          "python": "3.13.7",
+          "torch": "2.14.1",
+          "torchvision": "0.29.2",
+          "numpy": "2.5.4",
+          "pillow": "13.0.0",
+          "sahi": "0.12.8",
+          "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+          "machine": "arm64"
+        },
+        "precision": {
+          "parameters": "float32",
+          "inputs": "float32",
+          "autocast_enabled": false,
+          "gradient_scaler_enabled": false,
+          "tf32_enabled": false,
+          "scope": "Full FP32 execution; no AMP, quantization or compiled-model substitution"
+        },
+        "device_fallback": "none",
+        "mps_operator_fallback_enabled": true,
+        "torch_build_sha256": "6d6fa299a6d76bc6add8bfff4916da33cbc1636da24e90df594e6434f918b26c",
+        "deterministic_algorithms_enabled": false
+      }
+    }
+  ],
+  "cuda": {
+    "status": "blocked",
+    "code": "WHEAT_HARDWARE",
+    "message": "Requested CUDA requires Linux and a CUDA-enabled Torch build; no device fallback"
+  },
+  "seconds": 2.36
+}
