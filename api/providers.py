@@ -62,7 +62,7 @@ class Gateway:
         self.settings, self.save_receipt = settings, receipt
         self.last_receipt: dict | None = None
 
-    async def model(self, purpose: str, context: dict, schema: type[BaseModel], extra_rules: str = "") -> dict:
+    async def model(self, purpose: str, context: dict, schema: type[BaseModel], extra_rules: str = "", *, nominal_ceiling_usd: float | None = None) -> dict:
         cfg = self.settings
         if not cfg.api_key:
             raise ProviderError("provider_unconfigured", f"The {cfg.provider} server key is not configured. No substitute provider was used.")
@@ -74,8 +74,9 @@ class Gateway:
             "model": cfg.model, "status": "pending", "request_id": None,
             "purpose": purpose, "started_at": now(), "elapsed_ms": None,
             "input_tokens": None, "output_tokens": None, "estimated_cost_usd": None,
-            "reasoning_effort": "high", "max_output_tokens": 32000,
+            "reasoning_effort": "high" if cfg.provider == "fireworks" else "thinking_enabled", "max_output_tokens": 32000,
             "timeout_seconds": 480, "response_profile": "prompt_schema",
+            "endpoint": cfg.base_url,
             "context_sha256": __import__("hashlib").sha256(canonical(context)).hexdigest(),
             "error": None,
             "release": "Authored text, public source excerpts, locked parameters and released discovery aggregates. No confirmation labels or raw rows.",
@@ -84,7 +85,7 @@ class Gateway:
         start = time.monotonic()
         try:
             body = {
-                "model": cfg.model, "reasoning_effort": "high", "max_tokens": 32000,
+                "model": cfg.model, "max_tokens": 32000,
                 "messages": [
                     {"role": "system", "content": (
                         "You are the bounded experiment planner in Crucible. Propose, never certify. "
@@ -102,6 +103,25 @@ class Gateway:
                     {"role": "user", "content": "Inspect this released context and produce the requested proposal:\n" + canonical(context).decode()},
                 ],
             }
+            if cfg.provider == "nebius":
+                body.update(temperature=1.0, top_p=0.95,
+                            chat_template_kwargs={"enable_thinking": True, "force_nonempty_content": True})
+            else:
+                body["reasoning_effort"] = "high"
+            receipt["effective_settings"] = {key: value for key, value in body.items() if key != "messages"}
+            if nominal_ceiling_usd is not None:
+                if cfg.provider != "nebius":
+                    raise ProviderError("budget_route_mismatch", "This nominal admission bound is specific to the qualified Nebius Ultra route.")
+                # UTF-8 bytes plus a large template allowance conservatively
+                # bound this small prompt at the recorded uncached token rates.
+                input_bound = len(canonical(body)) + 4096
+                nominal_bound = (input_bound + 3 * body["max_tokens"]) / 1e6
+                receipt["budget_admission"] = {"nominal_ceiling_usd": nominal_ceiling_usd,
+                    "estimated_request_bound_usd": nominal_bound, "input_token_bound": input_bound,
+                    "basis": "UTF-8 request bytes + 4096 template-token allowance; 32000 output at $1/$3 per million. This is not a provider billing cap."}
+                if nominal_bound > nominal_ceiling_usd:
+                    receipt.update(estimated_cost_usd=0.0, cost_basis="No HTTP request was made; local admission rejected the bound.")
+                    raise ProviderError("request_budget_exceeded", "Bounded request would exceed its authorized nominal ceiling; no request was transmitted.")
             receipt["request_sha256"] = __import__("hashlib").sha256(canonical(body)).hexdigest()
             receipt["request_hash_format"] = "SHA256 of canonical UTF-8 JSON request body; authorization header excluded"
             receipt["request_payload"] = body
@@ -130,9 +150,14 @@ class Gateway:
             choice = (data.get("choices") or [{}])[0]
             receipt["finish_reason"] = choice.get("finish_reason")
             content = choice.get("message", {}).get("content")
+            if isinstance(content, str):
+                receipt["response_sha256"] = __import__("hashlib").sha256(content.encode()).hexdigest()
+                receipt["final_content"] = content[:131072]
+                receipt["final_content_truncated"] = len(content) > 131072
             if choice.get("finish_reason") != "stop" or not isinstance(content, str):
                 raise ProviderError("provider_incomplete", "Provider did not return a complete final answer. The unsuccessful attempt and usage are retained.")
-            receipt["response_sha256"] = __import__("hashlib").sha256(content.encode()).hexdigest()
+            # Final answer content is inspectable evidence. Never retain the
+            # provider's separate reasoning_content / hidden reasoning field.
             # Never retain or expose reasoning_content. Invalid final content is
             # not silently promoted into scientific authority.
             parsed = schema.model_validate(parse_content(content))
@@ -153,6 +178,7 @@ class Gateway:
         except (ValueError, KeyError, TypeError, IndexError) as error:
             receipt["status"] = "invalid_response"
             receipt["error"] = "Final answer failed strict local JSON/schema validation. No scientific fields were changed."
+            receipt["validation_error"] = str(error)[:6000]
             raise ProviderError("invalid_model_response", receipt["error"]) from error
         except httpx.HTTPError as error:
             receipt["status"] = "failed"

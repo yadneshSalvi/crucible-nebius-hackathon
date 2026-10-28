@@ -1,0 +1,231 @@
+{
+  "format": "crucible.orchestrator-local-qa/v1",
+  "recorded_at": "2026-10-28T16:32:17.278679+00:00",
+  "status": "AVAILABLE_SOFTWARE_CHECKS_PASSED_FULL_EXPERIMENT_PENDING",
+  "reviewer": "Codex root orchestrator (automated agent)",
+  "independent_human_review": false,
+  "checks": {
+    "primary_source_bootstrap": {
+      "case": "Fresh directory primary-source bootstrap",
+      "returncode": 0,
+      "status": "PASSED",
+      "qualification": {
+        "packet_sha256": "95930c9ac197c21dbd6f62326954c706630c4bbba82deec7fc19dcda51ba84a4",
+        "sources": [
+          {
+            "name": "wilds-supplement.pdf",
+            "download_url": "https://proceedings.mlr.press/v139/koh21a/koh21a-supp.pdf",
+            "sha256": "d00f0afa5e6422270a15ccd8d07871864f8629497762a0711f6949870d8c8403",
+            "bytes": 14955121,
+            "status": "retrieved_and_verified"
+          },
+          {
+            "name": "wilds-datasets.py",
+            "download_url": "https://raw.githubusercontent.com/p-lambda/wilds/472677590de351857197a9bf24958838c39c272b/examples/configs/datasets.py",
+            "sha256": "149f79ebde45112a96d16787cbaaf9c475a3c6fc2ea4adf2b62ec33faebf1435",
+            "bytes": 18729,
+            "status": "retrieved_and_verified"
+          }
+        ],
+        "code_excerpt_verified": true,
+        "pdf_excerpts": "Previously selected from inspected rendered page; source PDF bytes verified",
+        "scientific_result": false,
+        "independent_human_review": false
+      }
+    },
+    "incomplete_corpus_finalization": {
+      "case": "Actual incomplete public corpus cannot finalize",
+      "status": "PASSED",
+      "exit_code": 1,
+      "missing_images": 3652,
+      "manifest_created": false,
+      "expected_error": "ValueError: Cannot finalize: 3652 planned images are missing",
+      "scientific_result": false
+    },
+    "actual_api_readiness": {
+      "export_status": 409,
+      "export_error": "verification_required",
+      "prepared": false,
+      "training_status": "not_started",
+      "registration_status": "not_registered",
+      "conditions": [
+        {
+          "id": "native_full",
+          "status": "unrun"
+        },
+        {
+          "id": "native_noop",
+          "status": "unrun"
+        },
+        {
+          "id": "retain_768",
+          "status": "unrun"
+        },
+        {
+          "id": "retain_512",
+          "status": "unrun"
+        },
+        {
+          "id": "retain_256",
+          "status": "unrun"
+        },
+        {
+          "id": "native_tiles",
+          "status": "unrun"
+        },
+        {
+          "id": "degraded_tiles256",
+          "status": "unrun"
+        },
+        {
+          "id": "native_multiscale",
+          "status": "unrun"
+        }
+      ],
+      "receipt_count": 3,
+      "scientific_verification": null,
+      "export_url": null
+    },
+    "catalog_detector_pixel_correspondence": {
+      "status": "PASSED",
+      "image_id": "0077c64686e9712d9b8efcd930ce5b0d68c72d8fb50ee99ed01ff2fd73e6d1d2",
+      "role": "discovery",
+      "pixel_sha256": "aaffd8e262faa701a5e1c2b7cc97e53924b0c91b03685d0ff1fbe7bb44508e52",
+      "identity": "Raw RGB decoded bytes, fixed1024x1024/RGB verified",
+      "immutable_role_plan_unchanged": true,
+      "executable_manifest_created": false
+    },
+    "in_app_browser": {
+      "actual_origin": "http://127.0.0.1:4201",
+      "source_change_accepted_by": "automated root operator",
+      "accepted_change": "Enable the two predefined SAHI recipes from an actual Tavily primary-source retrieval",
+      "result": "Eight unrun conditions; no predictions or scientific decision invented",
+      "source_extraction_receipt": "65899456-abf1-4f82-a6ec-c57a0e66ff33",
+      "source_annotations_inspected": 45,
+      "resolution_selection_checked": 256,
+      "unrun_original_photo_remains_explicit": true,
+      "record_selection_checked": "target-0",
+      "legacy_history_folios": 6,
+      "legacy_occupancy_verdict_retained": "inconclusive",
+      "legacy_occupancy_exposure_retained": "reproducibility replay; confirmation labels previously used",
+      "source_extraction_receipt_scope": "Earlier primary-excerpt v2 browser check; v3 API verification retained separately.",
+      "final_viewport": {
+        "width": 1280,
+        "height": 720,
+        "full_source_photo_visible": true,
+        "intervention_visible": true,
+        "unrun_status_visible": true
+      },
+      "keyboard_annotation_selection": {
+        "sequence": [
+          "Expand Box records",
+          "Tab",
+          "Return"
+        ],
+        "selected_id": "target-0",
+        "accessible_selected_value": 1,
+        "selected_box_unobscured": true
+      },
+      "screenshots": [
+        {
+          "path": "docs/screenshots/wheat/iab-final-workbench.png",
+          "sha256": "bde4bf60ca6ae579ab46447b81711c5033302b461d4c52192331600853517e17"
+        },
+        {
+          "path": "docs/screenshots/wheat/iab-final-selected-box.png",
+          "sha256": "686e3b5b54c5c35ab8bcdbcd25aaadafe2722bf0499d1eb74b41c41cbb6656c8"
+        }
+      ]
+    },
+    "primary_source_v3_and_actual_gates": {
+      "recorded_at": "2026-10-28T16:36:22.609961+00:00",
+      "status": "PASSED",
+      "source_compilation_method": "primary_excerpt_extraction",
+      "source_compilation_profile": "atomic_source_fields_v3",
+      "receipt_id": "fdab1c81-c548-4a8c-b4a0-661b9d886b1c",
+      "six_primary_fields_match": true,
+      "source_history_entries": 3,
+      "prepared": false,
+      "conditions_unrun": 8,
+      "final_verification": null,
+      "export_status": 409,
+      "reviewer": "Automated root orchestrator"
+    },
+    "fresh_source_preview_bootstrap": {
+      "status": "PASSED",
+      "scope": "Actual primary-source preview bootstrap in a fresh empty directory; existing pinned Python environments",
+      "steps": [
+        {
+          "script": "qualify_wheat_assets.py",
+          "exit_code": 0
+        },
+        {
+          "script": "prepare_wheat_catalog.py",
+          "exit_code": 0
+        },
+        {
+          "script": "qualify_wheat_assets.py",
+          "exit_code": 0
+        },
+        {
+          "script": "prepare_wheat_catalog.py",
+          "exit_code": 0
+        }
+      ],
+      "role_plan_sha256": "bb64df545f2c51264a512a4c1e4cd275bc7a90d01705ce1a5f54cb6dc6c12e9f",
+      "roles": {
+        "train": 3011,
+        "final": 210,
+        "discovery": 432
+      },
+      "source_images": 1,
+      "missing_images": 3652,
+      "selection_precedes_image_fetch": true,
+      "selection_receipt_preserved": true,
+      "executable_manifest_created": false,
+      "detector_fit": false,
+      "final_labels_printed": false
+    },
+    "final_software_and_route_guards": {
+      "tests": {
+        "passed": 74,
+        "seconds": 16.06
+      },
+      "production_build": "passed",
+      "diff_check": "passed",
+      "ui_url": "http://127.0.0.1:4201",
+      "api_revision": 19,
+      "prepared": false,
+      "training": "not_started",
+      "unrun_cells": 8,
+      "final_registration": "not_registered",
+      "export_http": 409,
+      "legacy_wheat_route_rejections": {
+        "detail": 409,
+        "/events": 409,
+        "/report": 409,
+        "/export": 409
+      },
+      "retained_legacy_detail_http": 200,
+      "nebius": {
+        "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "qualification": "succeeded",
+        "development_calls": "disabled",
+        "role": "primary_excerpt_source_extraction",
+        "receipt_id": "69319c9d-ac50-4fe0-9849-f56425139cdf",
+        "scientific_workflow": "pending",
+        "limitation": "Source role only. Detector fitting, unrun-experiment planning and final scientific evaluation remain pending."
+      }
+    }
+  },
+  "pending": [
+    "Complete source images and cross-role duplicate audit",
+    "Real three-seed detector fitting",
+    "Discovery measurements and actual model-selected unrun experiment",
+    "Freeze and execute the final comparison family",
+    "Real exported-evidence replay outside the checkout",
+    "Independent human or practitioner validation (not available)"
+  ],
+  "claim_scope": "Software and bounded source-role checks only. No new detector result, paper reproduction, scientific advantage or participant study.",
+  "finalized_at": "2026-10-28T16:53:28.595955+00:00"
+}

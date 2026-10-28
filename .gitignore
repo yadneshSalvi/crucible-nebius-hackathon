@@ -5,6 +5,7 @@
 /plans/
 node_modules/
 .venv/
+.venv-wheat/
 __pycache__/
 .pytest_cache/
 *.pyc

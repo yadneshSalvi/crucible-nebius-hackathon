@@ -15,6 +15,7 @@ from .config import Settings
 from .exporting import export_bundle, report
 from .orchestrator import ACTIVE, Orchestrator
 from .store import Conflict, Store
+from .wheat import WheatOrchestrator
 
 
 class CreateFolio(BaseModel):
@@ -37,20 +38,32 @@ class Action(BaseModel):
     condition_id: str | None = Field(default=None, max_length=100)
 
 
+class WheatAction(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    revision: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    cell_id: str | None = Field(default=None, min_length=3, max_length=80)
+    operator_name: str | None = Field(default=None, min_length=1, max_length=100)
+    reason: str | None = Field(default=None, max_length=2000)
+
+
 def create_app(settings: Settings | None = None, seed: bool = True) -> FastAPI:
     cfg = settings or Settings.read()
     store = Store(cfg.root)
     runner = Orchestrator(cfg, store)
+    wheat = WheatOrchestrator(cfg, store)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if seed:
             await runner.startup()
+            wheat.ensure()
         yield
         await runner.shutdown()
+        await wheat.shutdown()
 
     app = FastAPI(title="Crucible trusted local control plane", version="0.1.0", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
-    app.state.store, app.state.runner = store, runner
+    app.state.store, app.state.runner, app.state.wheat = store, runner, wheat
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
 
     @app.middleware("http")
@@ -99,11 +112,43 @@ def create_app(settings: Settings | None = None, seed: bool = True) -> FastAPI:
 
     @app.get("/api/health")
     async def health():
-        return {"status": "ok", "product": "Crucible", "version": "0.1.0", "provider": cfg.public(), "adapters": ["occupancy", "synthetic"], "mode": "trusted_local", "ports": {"ui": 4201, "api": 4202}, "scope": "Authored tabular comparisons. Arbitrary paper/repository imports are not supported; original paper protocol matching and external scientific review are pending."}
+        provider = cfg.public()
+        try:
+            study = store.get("wheat-resolution-v1")
+            qualifications = [row for row in study.get("provider_qualifications", []) if row.get("provider") == "nebius"]
+            if qualifications:
+                latest = qualifications[-1]
+                provider["nebius"].update(qualification=latest["status"], role=latest["role"],
+                    receipt_id=latest.get("receipt_id"), scientific_workflow="pending", limitation=latest["limitation"])
+                if cfg.provider == "nebius":
+                    provider.update(qualified=latest["status"] == "succeeded", qualification_scope="source role only")
+        except KeyError:
+            pass
+        return {"status": "ok", "product": "Crucible", "version": "0.2.0", "provider": provider, "adapters": ["wheat", "occupancy", "synthetic"], "mode": "trusted_local", "ports": {"ui": 4201, "api": 4202}, "scope": "Source-informed wheat image experiment and retained authored tabular controls. Exact WILDS reproduction, independent practitioner review and adoption impact are not established."}
+
+    @app.get("/api/wheat")
+    async def wheat_study():
+        return wheat.public()
+
+    @app.post("/api/wheat/actions/{action}")
+    async def wheat_action(action: str, body: WheatAction):
+        doc = await wheat.action(action, body.model_dump(exclude_none=True))
+        return JSONResponse(doc, status_code=202 if doc.get("run") and doc["run"]["status"] in ACTIVE else 200)
+
+    @app.get("/api/wheat/export")
+    async def wheat_export():
+        path = await asyncio.to_thread(wheat.export_path)
+        return FileResponse(path, media_type="application/zip", filename="crucible-wheat-evidence.zip")
 
     @app.get("/api/folios")
     async def folios():
-        return {"folios": [{k: f.get(k) for k in ("id", "adapter_id", "title", "claim", "case_kind", "created_at", "updated_at", "revision", "stage", "status", "conclusion", "run", "reproduction_accepted")} for f in store.list()]}
+        return {"folios": [{k: f.get(k) for k in ("id", "adapter_id", "title", "claim", "case_kind", "created_at", "updated_at", "revision", "stage", "status", "conclusion", "run", "reproduction_accepted")} for f in store.list() if f.get("adapter_id") in {"occupancy", "synthetic"}]}
+
+    def legacy_folio(folio_id: str) -> dict:
+        doc = store.get(folio_id)
+        if doc.get("adapter_id") not in {"occupancy", "synthetic"}:
+            raise Conflict("legacy_adapter_required", "This route supports retained Occupancy and synthetic folios only. Use the dedicated wheat workflow for the wheat study.")
+        return doc
 
     @app.post("/api/folios", status_code=201)
     async def create_folio(body: CreateFolio):
@@ -111,15 +156,16 @@ def create_app(settings: Settings | None = None, seed: bool = True) -> FastAPI:
 
     @app.get("/api/folios/{folio_id}")
     async def folio(folio_id: str):
-        return store.get(folio_id)
+        return legacy_folio(folio_id)
 
     @app.get("/api/folios/{folio_id}/events")
     async def events(folio_id: str, after: int = 0):
-        store.get(folio_id)
+        legacy_folio(folio_id)
         return store.events(folio_id, max(0, after))
 
     @app.post("/api/folios/{folio_id}/actions/{action}")
     async def act(folio_id: str, action: str, body: Action):
+        legacy_folio(folio_id)
         doc = await runner.action(folio_id, action, body.model_dump(exclude_none=True))
         return JSONResponse(doc, status_code=202 if doc.get("run") and doc["run"]["status"] in ACTIVE else 200)
 
@@ -130,13 +176,13 @@ def create_app(settings: Settings | None = None, seed: bool = True) -> FastAPI:
 
     @app.get("/api/folios/{folio_id}/report", response_class=HTMLResponse)
     async def html_report(folio_id: str):
-        response = HTMLResponse(report(store.get(folio_id)))
+        response = HTMLResponse(report(legacy_folio(folio_id)))
         response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"
         return response
 
     @app.get("/api/folios/{folio_id}/export")
     async def export(folio_id: str):
-        content, filename = await asyncio.to_thread(export_bundle, store, store.get(folio_id))
+        content, filename = await asyncio.to_thread(export_bundle, store, legacy_folio(folio_id))
         return Response(content, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
     return app

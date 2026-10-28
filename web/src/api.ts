@@ -6,6 +6,7 @@ import type {
   FolioSummary,
   Health,
 } from "./types";
+import type { WheatStudy } from "./wheat-types";
 
 export class ApiError extends Error {
   code: string;
@@ -92,6 +93,11 @@ async function mutation<T>(
 }
 
 export const api = {
+  wheat: () => request<WheatStudy>("/wheat"),
+  wheatAction: (study: WheatStudy, action: string, body: Record<string, unknown> = {}, idempotencyKey = crypto.randomUUID()) =>
+    mutation<WheatStudy>(`/wheat/actions/${encodeURIComponent(action)}`, {
+      ...body, revision: study.revision, idempotency_key: idempotencyKey,
+    }),
   health: () => request<Health>("/health"),
   folios: () => request<{ folios: FolioSummary[] }>("/folios"),
   folio: (id: string) => request<Folio>(`/folios/${encodeURIComponent(id)}`),

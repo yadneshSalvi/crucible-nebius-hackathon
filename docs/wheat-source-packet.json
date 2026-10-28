@@ -1,0 +1,59 @@
+{
+  "format": "crucible.primary-source-excerpts/v1",
+  "purpose": "Advisory extraction from bounded primary excerpts; expected values are not included as answers. Original source correspondence and scientific execution remain separate.",
+  "review": "Local automated operator inspected full source and rendered PDF page; no independent human reviewer.",
+  "sources": [
+    {
+      "source_id": "https://proceedings.mlr.press/v139/koh21a/koh21a-supp.pdf",
+      "url": "https://proceedings.mlr.press/v139/koh21a/koh21a-supp.pdf",
+      "kind": "published_original_supplement",
+      "sha256": "d00f0afa5e6422270a15ccd8d07871864f8629497762a0711f6949870d8c8403",
+      "bytes": 14955121,
+      "locator": "GlobalWheat H.5.2, PDF page 27 (printed page 26)",
+      "excerpt_method": "Right column of the inspected rendered page; PDF-to-text whitespace normalized. Ellipsis separates two short exact excerpts.",
+      "excerpt": "learning rate of 10−4 … weight decay of 10−4 for 10 epochs with early stopping."
+    },
+    {
+      "source_id": "https://github.com/p-lambda/wilds/blob/472677590de351857197a9bf24958838c39c272b/examples/configs/datasets.py",
+      "url": "https://github.com/p-lambda/wilds/blob/472677590de351857197a9bf24958838c39c272b/examples/configs/datasets.py",
+      "kind": "pinned_current_repository_defaults",
+      "sha256": "149f79ebde45112a96d16787cbaaf9c475a3c6fc2ea4adf2b62ec33faebf1435",
+      "bytes": 18729,
+      "revision": "472677590de351857197a9bf24958838c39c272b",
+      "locator": "examples/configs/datasets.py lines 442–444, globalwheat configuration",
+      "context": "Pinned current defaults, not proof of original executable run",
+      "excerpt": "'lr': 1e-5,\n'weight_decay': 1e-3,\n'n_epochs': 12,"
+    }
+  ],
+  "required_fields": [
+    {
+      "field": "original_epochs",
+      "source_id": "https://proceedings.mlr.press/v139/koh21a/koh21a-supp.pdf"
+    },
+    {
+      "field": "original_learning_rate",
+      "source_id": "https://proceedings.mlr.press/v139/koh21a/koh21a-supp.pdf"
+    },
+    {
+      "field": "original_weight_decay",
+      "source_id": "https://proceedings.mlr.press/v139/koh21a/koh21a-supp.pdf"
+    },
+    {
+      "field": "current_epochs",
+      "source_id": "https://github.com/p-lambda/wilds/blob/472677590de351857197a9bf24958838c39c272b/examples/configs/datasets.py"
+    },
+    {
+      "field": "current_learning_rate",
+      "source_id": "https://github.com/p-lambda/wilds/blob/472677590de351857197a9bf24958838c39c272b/examples/configs/datasets.py"
+    },
+    {
+      "field": "current_weight_decay",
+      "source_id": "https://github.com/p-lambda/wilds/blob/472677590de351857197a9bf24958838c39c272b/examples/configs/datasets.py"
+    }
+  ],
+  "limitations": [
+    "Bounded excerpts do not establish original commands, partitions or checkpoints.",
+    "The source audit separately records initialization and license ambiguity.",
+    "The new experiment uses its own explicitly registered choices; no outcome-based source selection."
+  ]
+}

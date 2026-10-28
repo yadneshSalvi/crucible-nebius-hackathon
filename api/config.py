@@ -19,6 +19,9 @@ class Settings:
     tavily_key: str
     allow_nebius: bool
     source_zip: Path | None
+    wheat_manifest: Path | None = None
+    wheat_initialization: Path | None = None
+    wheat_python: Path | None = None
 
     @classmethod
     def read(cls) -> "Settings":
@@ -30,15 +33,15 @@ class Settings:
         provider = setting("CRUCIBLE_PROVIDER", "fireworks")
         routes = {
             "fireworks": ("accounts/fireworks/models/nemotron-3-ultra-nvfp4", "https://api.fireworks.ai/inference/v1", "FIREWORKS_AI_API_KEY"),
-            "nebius": ("nvidia/Nemotron-3-Ultra-550b-a55b", "https://api.tokenfactory.nebius.com/v1", "NEBIUS_API_KEY"),
+            "nebius": ("nvidia/Nemotron-3-Ultra-550b-a55b", "https://api.tokenfactory.us-central1.nebius.com/v1", "NEBIUS_API_KEY"),
         }
         if provider not in routes:
             raise ValueError("CRUCIBLE_PROVIDER must be fireworks or nebius; no implicit fallback is available.")
         model, url, key = routes[provider]
         if provider == "nebius":
             model = setting("CRUCIBLE_NEBIUS_MODEL", model)
-            if model not in {"nvidia/Nemotron-3-Ultra-550b-a55b", "nvidia/nemotron-3-super-120b-a12b"}:
-                raise ValueError("Select an explicit supported Nebius model identity.")
+            if model != "nvidia/Nemotron-3-Ultra-550b-a55b":
+                raise ValueError("This qualified adapter requires NVIDIA Nemotron Ultra; no smaller-model downgrade is supported.")
         source_zip = PROJECT.parent / "artifacts/crucible-data-audit/occupancy.zip"
         return cls(
             root=Path(setting("CRUCIBLE_RUNTIME", str(PROJECT / "runtime"))).resolve(),
@@ -46,6 +49,9 @@ class Settings:
             tavily_key=setting("TAVILY_API_KEY"),
             allow_nebius=setting("CRUCIBLE_ENABLE_NEBIUS", "false").lower() == "true",
             source_zip=source_zip if source_zip.is_file() else None,
+            wheat_manifest=Path(setting("CRUCIBLE_WHEAT_MANIFEST")).resolve() if setting("CRUCIBLE_WHEAT_MANIFEST") else None,
+            wheat_initialization=Path(setting("CRUCIBLE_WHEAT_INITIALIZATION")).resolve() if setting("CRUCIBLE_WHEAT_INITIALIZATION") else None,
+            wheat_python=Path(setting("CRUCIBLE_WHEAT_PYTHON")).absolute() if setting("CRUCIBLE_WHEAT_PYTHON") else None,
         )
 
     def public(self) -> dict:

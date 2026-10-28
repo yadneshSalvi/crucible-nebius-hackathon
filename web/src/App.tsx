@@ -23,6 +23,7 @@ import { Inspector } from "./Inspector";
 import { Library } from "./Library";
 import { StageContent } from "./stages";
 import { ProviderContext, providerStatus } from "./provider";
+import { WheatWorkspace } from "./WheatWorkspace";
 import type { ReviewAction } from "./stages";
 import type {
   Action,
@@ -125,7 +126,27 @@ const actionAnnouncements: Partial<Record<Action, string>> = {
   resume: "Saved operation is resuming.",
 };
 
+const isHistoryRoute = () => {
+  const query = new URLSearchParams(window.location.search);
+  return query.has("folio") || query.get("view") === "history";
+};
+
 export default function App() {
+  const [history, setHistory] = useState(isHistoryRoute);
+  useEffect(() => {
+    const back = () => setHistory(isHistoryRoute());
+    window.addEventListener("popstate", back);
+    return () => window.removeEventListener("popstate", back);
+  }, []);
+  const openHistory = () => {
+    window.history.pushState({}, "", `${window.location.pathname}?view=history`);
+    setHistory(true);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+  return history ? <LegacyApp /> : <WheatWorkspace onHistory={openHistory} />;
+}
+
+function LegacyApp() {
   const [route, setRoute] = useState<Route>(readRoute);
   const [folios, setFolios] = useState<FolioSummary[]>([]);
   const [folio, setFolio] = useState<Folio | null>(null);
@@ -162,7 +183,7 @@ export default function App() {
         query.set("stage", next.stage);
         query.set("inspect", next.inspector);
         if (next.condition) query.set("condition", next.condition);
-      }
+      } else query.set("view", "history");
       const nextUrl = `${window.location.pathname}${query.size ? `?${query}` : ""}`;
       if (nextUrl !== `${window.location.pathname}${window.location.search}`)
         window.history[replace ? "replaceState" : "pushState"]({}, "", nextUrl);

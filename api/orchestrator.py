@@ -5,10 +5,12 @@ import copy
 import hashlib
 import json
 import os
+import re
 import resource
 import signal
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -39,6 +41,42 @@ class Orchestrator:
         self.processes: dict[str, asyncio.subprocess.Process] = {}
         self.closing = False
 
+    @staticmethod
+    def _orphan_command_matches(command: str, directory: Path) -> bool:
+        module = re.search(r"(?:^|\s)-m\s+(?:science\.cli|science\.wheat_cli)(?:\s|$)", command)
+        output = re.search(r"(?:^|\s)--output\s+[\"']?" + re.escape(str(directory.resolve()) + os.sep), command)
+        return bool(module and output)
+
+    def _stop_orphan(self, pid: int, directory: Path) -> tuple[str, bool]:
+        """Stop only the exact retained module/job process group; fence PID reuse."""
+        def owned():
+            try:
+                command = subprocess.check_output(["ps", "-p", str(pid), "-o", "command="], text=True, timeout=2)
+                return self._orphan_command_matches(command, directory)
+            except (ProcessLookupError, subprocess.CalledProcessError):
+                return False
+        try:
+            if not owned():
+                return "not_running_or_pid_reused", True
+            if os.getpgid(pid) != pid:
+                return "matching_worker_has_unrecognized_process_group", False
+            os.killpg(pid, signal.SIGTERM)
+            for _ in range(20):
+                if not owned():
+                    return "terminated_exact_job_group", True
+                time.sleep(.05)
+            if owned() and os.getpgid(pid) == pid:
+                os.killpg(pid, signal.SIGKILL)
+            for _ in range(20):
+                if not owned():
+                    return "killed_exact_job_group", True
+                time.sleep(.05)
+            return "worker_termination_unconfirmed", False
+        except ProcessLookupError:
+            return "already_exited", True
+        except (subprocess.SubprocessError, PermissionError):
+            return "worker_identity_or_cleanup_unconfirmed", False
+
     async def startup(self):
         with self.store.transaction():
             for row in self.store.db.execute("SELECT doc FROM jobs WHERE status IN ('queued','running','cancel_requested')").fetchall():
@@ -46,18 +84,14 @@ class Orchestrator:
                 pid = job.get("pid")
                 # Reconcile only a process whose command still names this exact
                 # job directory; never terminate a recycled PID blindly.
-                if pid:
-                    try:
-                        command = subprocess.check_output(["ps", "-p", str(pid), "-o", "command="], text=True, timeout=2)
-                        if str(self.store.root / "jobs" / job["id"]) in command and "science.cli" in command:
-                            os.killpg(pid, signal.SIGTERM)
-                    except (ProcessLookupError, subprocess.SubprocessError, PermissionError):
-                        pass
-                job.update(status="interrupted", fence=job["fence"] + 1, updated_at=now(), can_resume=True,
+                cleanup, resumable = self._stop_orphan(pid, self.store.root / "jobs" / job["id"]) if pid else ("no_worker_pid", True)
+                job.update(status="interrupted", fence=job["fence"] + 1, updated_at=now(), can_resume=resumable, orphan_cleanup=cleanup,
                            error="The service restarted before this attempt committed. Completed immutable artifacts are retained; resume creates a new attempt.")
+                if not resumable:
+                    job["error"] = "Worker cleanup could not be confirmed. Resume is blocked to prevent a second fit colliding with the retained attempt."
                 self._save_job(job)
                 doc = self.store._folio(job["folio_id"])
-                if doc.get("run", {}).get("id") == job["id"]:
+                if (doc.get("run") or {}).get("id") == job["id"]:
                     doc.update(run=self._public_job(job), status="interrupted")
                     self.store._save(doc)
                     self.store._event(doc["id"], "interrupted", job["error"], job["id"])
@@ -172,6 +206,27 @@ class Orchestrator:
             current = self._current_job(job["id"])
             self._checkpoint(job, current["checkpoint"], event=False)
 
+    def _science_working_directory(self, job: dict, stage: str) -> Path:
+        """Use the retained package; never silently replace historical code."""
+        if stage == "prepare":
+            return PROJECT
+        doc = self.store.get(job["folio_id"])
+        source_dir, expected = doc.get("source_snapshot_dir"), doc.get("trusted_code")
+        if not source_dir or not isinstance(expected, dict) or not expected:
+            raise ScienceError("frozen_source_required", "The prepared case has no complete trusted source identity. Current code cannot silently replace it.")
+        root = Path(job["input"]["root"]).resolve()
+        snapshot = (root / source_dir).resolve()
+        package = snapshot / "science"
+        if not snapshot.is_relative_to(root) or not package.is_dir() or package.is_symlink():
+            raise ScienceError("frozen_source_missing", "The retained numerical package is unavailable or outside its case.")
+        if {path.name for path in package.glob("*.py")} != set(expected):
+            raise ScienceError("frozen_source_changed", "The retained module set changed. No replacement source is authorized.")
+        for name, sha in expected.items():
+            path = package / name
+            if Path(name).name != name or path.is_symlink() or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != sha:
+                raise ScienceError("frozen_source_changed", "A retained numerical module failed its exact source hash.")
+        return snapshot
+
     async def _science(self, job: dict, stage: str) -> dict:
         directory = self.store.root / "jobs" / job["id"]
         directory.mkdir(parents=True, exist_ok=True)
@@ -192,7 +247,8 @@ class Orchestrator:
             resource.setrlimit(resource.RLIMIT_CPU, (240, 245))
             resource.setrlimit(resource.RLIMIT_FSIZE, (256 * 1024 * 1024, 256 * 1024 * 1024))
             resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
-        process = await asyncio.create_subprocess_exec(*argv, cwd=PROJECT, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True, preexec_fn=limits)
+        working_directory = self._science_working_directory(job, stage)
+        process = await asyncio.create_subprocess_exec(*argv, cwd=working_directory, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True, preexec_fn=limits)
         self.processes[job["id"]] = process
         with self.store.lock:
             current = self._current_job(job["id"])
@@ -232,6 +288,7 @@ class Orchestrator:
                 value = value.replace(path, label)
             return value
         log = {"command": ["python", "-m", "science.cli", stage], "exit_code": process.returncode,
+               "source_execution": "current trusted preparation package" if stage == "prepare" else "hash-verified retained frozen numerical package",
                "stdout": portable_log(stdout), "stderr": portable_log(stderr), "path_normalization": "Local paths replaced with named placeholders at receipt creation; numerical artifacts are unchanged",
                "isolation": "Trusted authored code; separate process, filtered environment without provider keys, CPU/file/wall-time limits. Same OS identity; no kernel network/filesystem sandbox."}
         log_artifact = self.store.json_artifact(log, f"{stage}-execution.json", "execution")
