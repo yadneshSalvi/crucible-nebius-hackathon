@@ -1,5 +1,7 @@
 # Crucible
 
+**Submission demo:** [Watch on YouTube](https://www.youtube.com/watch?v=o19hXZVKV14).
+
 An image-first research workbench for measuring how wheat-head counts change when pixels are discarded before upload. Authentic Global Wheat Head Dataset photographs and boxes sit beside a fixed detector protocol, known SAHI controls, an unrun-experiment planner, independent numerical checks and a registered final comparison.
 
 This is a **new source-informed experiment on a finite public corpus**, not exact WILDS reproduction, an algorithmic novelty claim or a validated field policy. Independent reviewers, practitioner thresholds, acquisition-unit independence and adoption evidence are unavailable. Source annotations are real; detector cells remain explicitly unrun until actual fitting and inference finish.
