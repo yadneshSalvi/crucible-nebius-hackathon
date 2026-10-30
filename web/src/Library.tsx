@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -26,13 +26,23 @@ export function Library({
   onCreate: (adapter: AdapterId) => void;
   onScope: () => void;
 }) {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(() =>
+    new URLSearchParams(window.location.search).get("outcome") === "recorded"
+      ? "recorded"
+      : "all",
+  );
+  const libraryHeading = useRef<HTMLHeadingElement>(null);
+  const recordedCount = folios.filter(
+    (folio) => folio.conclusion?.outcome ?? folio.outcome,
+  ).length;
   const filtered = folios.filter(
     (folio) =>
       filter === "all" ||
-      (filter === "pending"
-        ? !folio.conclusion && !folio.outcome
-        : (folio.conclusion?.outcome ?? folio.outcome) === filter),
+      (filter === "recorded"
+        ? Boolean(folio.conclusion?.outcome ?? folio.outcome)
+        : filter === "pending"
+          ? !folio.conclusion && !folio.outcome
+          : (folio.conclusion?.outcome ?? folio.outcome) === filter),
   );
   return (
     <main className="library" id="main-content" tabIndex={-1}>
@@ -55,10 +65,18 @@ export function Library({
           <div className="library-hero-actions">
             <Button
               tone="primary"
-              icon={<Plus size={17} />}
-              onClick={() => onCreate("occupancy")}
+              icon={recordedCount ? <BookOpen size={17} /> : <Plus size={17} />}
+              onClick={() => {
+                if (recordedCount) {
+                  setFilter("recorded");
+                  libraryHeading.current?.focus({ preventScroll: true });
+                  libraryHeading.current?.scrollIntoView({ block: "start" });
+                } else onCreate("occupancy");
+              }}
             >
-              Start a research folio
+              {recordedCount
+                ? "Read recorded conclusions"
+                : "Start a research folio"}
             </Button>
             <button className="text-button" onClick={onScope}>
               Explore the supported scope <ArrowUpRight size={15} />
@@ -104,10 +122,16 @@ export function Library({
         <div className="library-toolbar">
           <div>
             <span className="eyebrow">YOUR RESEARCH</span>
-            <h2 id="library-heading">
+            <h2 id="library-heading" ref={libraryHeading} tabIndex={-1}>
               Evidence folios{" "}
               <span>{folios.length.toString().padStart(2, "0")}</span>
             </h2>
+            {!loading ? (
+              <p className="library-evidence-summary">
+                {recordedCount} with recorded conclusions ·{" "}
+                {folios.length - recordedCount} awaiting a conclusion
+              </p>
+            ) : null}
           </div>
           <div className="library-controls">
             <label className="sr-only" htmlFor="outcome-filter">
@@ -119,6 +143,7 @@ export function Library({
               onChange={(event) => setFilter(event.target.value)}
             >
               <option value="all">All outcomes</option>
+              <option value="recorded">Recorded conclusions</option>
               <option value="pending">Awaiting evidence</option>
               <option value="inconclusive">Inconclusive</option>
               <option value="supported_in_tested_scope">
@@ -163,13 +188,20 @@ export function Library({
                         <span>
                           {folio.adapter_id === "synthetic" ||
                           folio.case_kind === "controlled_synthetic"
-                            ? "CONTROLLED SYNTHETIC"
+                            ? "CONTROLLED SYNTHETIC · GENERATOR ONLY"
                             : "AUTHORED · PUBLIC DATA"}
                         </span>
                         <span>SUPERVISED CLASSIFICATION</span>
                       </span>
                       <span className="folio-row-title">{folio.title}</span>
-                      <span className="folio-row-claim">{folio.claim}</span>
+                      <span className="folio-row-claim">
+                        <span className="folio-row-copy-label">
+                          {folio.conclusion
+                            ? "Recorded result"
+                            : "Claim to test"}
+                        </span>
+                        {folio.conclusion?.statement ?? folio.claim}
+                      </span>
                     </span>
                     <span className="folio-row-status">
                       <Pill

@@ -156,6 +156,7 @@ function LegacyApp() {
   const [folio, setFolio] = useState<Folio | null>(null);
   const [loadingLibrary, setLoadingLibrary] = useState(true);
   const [loadingFolio, setLoadingFolio] = useState(false);
+  const [failedFolioId, setFailedFolioId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -241,6 +242,7 @@ function LegacyApp() {
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     setLoadingFolio(true);
+    setFailedFolioId(null);
     setFolio((current) => (current?.id === id ? current : null));
     async function poll(initial: boolean) {
       let delay = 5000;
@@ -260,7 +262,8 @@ function LegacyApp() {
         if (!alive) return;
         setConnected(false);
         setPollWarning(true);
-        if (initial)
+        if (initial) {
+          setFailedFolioId(id);
           setError(
             failure instanceof ApiError
               ? failure
@@ -270,6 +273,7 @@ function LegacyApp() {
                     "This folio could not be opened. Return to the library or refresh the saved record.",
                 }),
           );
+        }
       } finally {
         if (alive) {
           setLoadingFolio(false);
@@ -436,6 +440,7 @@ function LegacyApp() {
     null;
   const onOpen = (summary: FolioSummary) => {
     setError(null);
+    setFailedFolioId(null);
     navigate({
       folio: summary.id,
       stage:
@@ -645,7 +650,7 @@ function LegacyApp() {
             />
           ) : null}
         </div>
-      ) : loadingFolio ? (
+      ) : loadingFolio || failedFolioId !== route.folio ? (
         <BusyPage />
       ) : (
         <main className="missing-folio" id="main-content">

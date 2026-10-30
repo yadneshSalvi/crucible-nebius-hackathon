@@ -6,6 +6,8 @@ This is a **new source-informed experiment on a finite public corpus**, not exac
 
 The retained Occupancy and XOR folios are available through **History**. Their results, failures and exposure history remain intact. Occupancy remains inconclusive (−1.5729 percentage points; day independence unestablished); the nonlinear result applies to its generator only.
 
+For a short walkthrough of the saved results and prepared wheat photograph, follow the [read-only demo guide](docs/DEMO.md). It requires no new scientific computation or provider calls.
+
 ## Run locally
 
 Use Node 22.22+ and Python 3.11 for the API and tests. Both services bind to loopback.

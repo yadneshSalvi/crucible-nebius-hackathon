@@ -15,10 +15,8 @@ const output = new URL("./qa-output/", import.meta.url);
 await mkdir(output, { recursive: true });
 const errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
-await page.goto("http://127.0.0.1:4201/");
-await page
-  .getByRole("button", { name: "Start a research folio", exact: true })
-  .click();
+await page.goto("http://127.0.0.1:4201/?view=history");
+await page.getByRole("button", { name: "New folio", exact: true }).click();
 await expect(page.getByRole("dialog")).toBeVisible();
 await page.getByRole("radio", { name: /Controlled synthetic case/ }).check();
 await page.locator("#new-title").fill("UI QA — reviewed synthetic workflow");

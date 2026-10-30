@@ -65,6 +65,30 @@
   line-height: 1.65;
   color: var(--muted);
 }
+.wheat-study-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+  margin-top: 12px;
+  font-size: 0.69rem;
+  line-height: 1.6;
+  color: var(--wheat-forest);
+}
+.wheat-study-status > span + span::before {
+  content: "·";
+  margin-right: 9px;
+  color: var(--wheat-gold);
+}
+.wheat-history-action {
+  margin-top: 17px;
+  min-height: 44px;
+  width: 100%;
+  justify-content: space-between;
+  border-color: #aab6a3;
+  color: var(--wheat-forest);
+  font-size: 0.72rem;
+  text-decoration: none;
+}
 .wheat-question {
   border-left: 1px solid #b5bfae;
   padding: 3px 0 2px 24px;

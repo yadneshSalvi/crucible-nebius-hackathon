@@ -150,6 +150,28 @@ export function Wheat({
             Keep the field. Change the image. Follow every head the detector
             finds — and every one it misses.
           </p>
+          {study ? (
+            <p className="wheat-study-status">
+              <span>
+                {study.status === "prepared"
+                  ? "Prepared corpus"
+                  : human(study.status)}
+              </span>
+              <span>
+                {study.training.checkpoint_sha256 ||
+                study.training.checkpoint_set_sha256
+                  ? "Detector trained"
+                  : study.training.status === "not_started"
+                    ? "Detector not trained"
+                    : `Detector ${human(study.training.status)}`}
+              </span>
+              <span>
+                {completed === 0
+                  ? "No measured conditions"
+                  : `${completed} measured conditions`}
+              </span>
+            </p>
+          ) : null}
         </div>
         <aside className="wheat-question">
           <span className="eyebrow">THE DECISION</span>
@@ -164,6 +186,12 @@ export function Wheat({
             External practitioner threshold and independent review are not
             established.
           </span>
+          <a
+            className="button wheat-history-action"
+            href="?view=history&outcome=recorded"
+          >
+            Explore completed experiments <ArrowRight size={15} />
+          </a>
         </aside>
       </header>
 
@@ -207,7 +235,7 @@ export function Wheat({
               {human(study.experiment_kind)}
             </div>
             <span>
-              {completed} / {study.cells.length} recorded conditions
+              {completed} / {study.cells.length} measured conditions
             </span>
             {study.run?.status === "succeeded" && !running ? (
               <span className="wheat-context-last-operation">
@@ -309,7 +337,11 @@ export function Wheat({
             <div className="wheat-setup-banner">
               <FlaskConical size={17} />
               <div>
-                <strong>Source image prepared. The detector comes next.</strong>
+                <strong>
+                  {study.status === "prepared"
+                    ? "Declared corpus prepared. The detector comes next."
+                    : "Source image prepared. The detector comes next."}
+                </strong>
                 <p>
                   {study.training.detail ??
                     "Train the declared model before measuring the image conditions."}

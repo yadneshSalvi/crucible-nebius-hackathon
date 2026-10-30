@@ -655,6 +655,23 @@ code,
   border-radius: 3px;
   padding: 3px 6px;
 }
+.library-evidence-summary {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+#library-heading {
+  scroll-margin-top: 24px;
+}
+.folio-row-copy-label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--blue);
+  font: 0.56rem/1.6 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .library-controls {
   display: flex;
   align-items: center;
